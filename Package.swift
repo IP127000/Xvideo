@@ -3,17 +3,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "LzizyMac",
+    name: "xvideo",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "LzizyMac", targets: ["LzizyMac"])
+        .executable(name: "xvideo", targets: ["xvideo"])
     ],
     targets: [
         .executableTarget(
-            name: "LzizyMac",
-            path: "Sources/LzizyMac",
+            name: "xvideo",
+            path: "Sources/xvideo",
             linkerSettings: [
                 .linkedFramework("AVKit"),
                 .linkedFramework("AppKit")

@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct LzizyMacApp: App {
+struct XVideoApp: App {
     @StateObject private var library = AppEnvironment.makeLibraryViewModel()
     @StateObject private var downloads = DownloadManager()
 

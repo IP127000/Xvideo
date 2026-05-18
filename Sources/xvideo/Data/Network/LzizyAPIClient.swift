@@ -5,7 +5,7 @@ struct LzizyAPIClient: Sendable {
     private let baseURL = URL(string: "https://lzizy.net/api.php/provide/vod/")!
     private let searchURL = URL(string: "https://macapi1.com/maccms/json/liangzi/")!
     private let defaultHeaders = [
-        "User-Agent": "LzizyMac/1.0",
+        "User-Agent": "xvideo/1.0",
         "Accept": "application/json,text/plain,*/*"
     ]
 

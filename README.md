@@ -1,4 +1,4 @@
-# 量子影视 macOS
+# xvideo macOS
 
 一个基于 `https://lzizy.net/api.php/provide/vod/` 的原生 macOS 影视客户端。
 
@@ -9,7 +9,7 @@
 ## 架构分层
 
 ```text
-Sources/LzizyMac
+Sources/xvideo
 ├── App
 ├── Presentation
 │   ├── ViewModels
@@ -45,21 +45,21 @@ Sources/LzizyMac
 - 影片搜索
 - 海报、简介、地区、年份、主演、导演等详情
 - m3u8 在线播放
-- mp4 下载到 `~/Downloads/LzizyMac`
+- mp4 下载到 `~/Downloads/xvideo`
 
 ## 开发运行
 
 ```bash
-cd LzizyMac
-swift run LzizyMac
+cd xvideo
+swift run xvideo
 ```
 
 ## 打包为 .app
 
 ```bash
-cd LzizyMac
+cd xvideo
 ./Scripts/build_app.sh
-open .build/app/LzizyMac.app
+open .build/app/xvideo.app
 ```
 
 ## Git 使用建议

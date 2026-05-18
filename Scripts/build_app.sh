@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-APP_DIR="$ROOT_DIR/.build/app/LzizyMac.app"
+APP_DIR="$ROOT_DIR/.build/app/xvideo.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
@@ -12,7 +12,7 @@ swift build -c debug
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
-cp "$ROOT_DIR/.build/debug/LzizyMac" "$MACOS_DIR/LzizyMac"
+cp "$ROOT_DIR/.build/debug/xvideo" "$MACOS_DIR/xvideo"
 
 cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -20,13 +20,13 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>LzizyMac</string>
+    <string>xvideo</string>
     <key>CFBundleIdentifier</key>
-    <string>net.lzizy.macos</string>
+    <string>com.seeker.xvideo</string>
     <key>CFBundleName</key>
-    <string>量子影视</string>
+    <string>xvideo</string>
     <key>CFBundleDisplayName</key>
-    <string>量子影视</string>
+    <string>xvideo</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
