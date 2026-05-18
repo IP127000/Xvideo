@@ -37,6 +37,8 @@ Sources/LzizyMac
 - `Infrastructure`：下载、文件、系统能力
 - `Shared`：公共扩展与通用支持代码
 
+更详细的架构说明见 [Docs/Architecture.md](Docs/Architecture.md)。
+
 ## 功能
 
 - 最新资源列表和分类浏览

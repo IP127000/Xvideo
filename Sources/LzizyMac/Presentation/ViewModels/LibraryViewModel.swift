@@ -15,10 +15,15 @@ final class LibraryViewModel: ObservableObject {
     @Published var pageCount = 1
     @Published var total = 0
 
-    private let repository: any LibraryRepository
+    private let loadLibraryPage: LoadLibraryPageUseCase
+    private let loadMovieDetail: LoadMovieDetailUseCase
 
-    init(repository: any LibraryRepository) {
-        self.repository = repository
+    init(
+        loadLibraryPage: LoadLibraryPageUseCase,
+        loadMovieDetail: LoadMovieDetailUseCase
+    ) {
+        self.loadLibraryPage = loadLibraryPage
+        self.loadMovieDetail = loadMovieDetail
     }
 
     var rootCategories: [VodCategory] {
@@ -72,11 +77,10 @@ final class LibraryViewModel: ObservableObject {
         errorMessage = nil
 
         do {
-            if let cached = movieFromCache(matching: item), cached.vodPlayURL != nil {
-                detailMovie = cached
-            } else {
-                detailMovie = try await repository.fetchDetail(id: item.vodId)
-            }
+            detailMovie = try await loadMovieDetail.execute(
+                item: item,
+                cachedItem: movieFromCache(matching: item)
+            )
         } catch {
             guard !isCancellation(error) else {
                 detailMovie = item
@@ -101,33 +105,32 @@ final class LibraryViewModel: ObservableObject {
 
         let targetPage = reset ? 1 : page + 1
         do {
-            let effectiveResponse = try await loadResponse(page: targetPage)
+            let libraryPage = try await loadLibraryPage.execute(
+                selectedCategory: selectedCategory,
+                categories: categories,
+                keyword: searchText,
+                page: targetPage
+            )
 
-            if shouldUseRemoteCategories(from: effectiveResponse),
-               let remoteCategories = effectiveResponse.class,
-               !remoteCategories.isEmpty {
+            if shouldUseRemoteCategories(libraryPage.remoteCategories),
+               let remoteCategories = libraryPage.remoteCategories {
                 categories = remoteCategories
-            } else if categories.isEmpty {
-                let remoteCategories = try await repository.fetchCategories()
-                if !remoteCategories.isEmpty {
-                    categories = remoteCategories
-                }
             }
 
-            page = effectiveResponse.page ?? targetPage
-            pageCount = effectiveResponse.pagecount ?? 1
-            total = effectiveResponse.total ?? effectiveResponse.list.count
+            page = libraryPage.page
+            pageCount = libraryPage.pageCount
+            total = libraryPage.total
 
             if reset {
-                movies = effectiveResponse.list
-                if let first = effectiveResponse.list.first {
+                movies = libraryPage.items
+                if let first = libraryPage.items.first {
                     await selectMovie(first)
                 } else {
                     selectedMovie = nil
                     detailMovie = nil
                 }
             } else {
-                movies.append(contentsOf: effectiveResponse.list)
+                movies.append(contentsOf: libraryPage.items)
             }
         } catch {
             guard !isCancellation(error) else {
@@ -140,88 +143,8 @@ final class LibraryViewModel: ObservableObject {
         isLoadingList = false
     }
 
-    private func loadResponse(page targetPage: Int) async throws -> VodListResponse {
-        let keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !keyword.isEmpty {
-            return try await repository.search(keyword: keyword, page: targetPage)
-        }
-
-        if categories.isEmpty {
-            let remoteCategories = try await repository.fetchCategories()
-            if !remoteCategories.isEmpty {
-                categories = remoteCategories
-            }
-        }
-
-        let aggregateCategories = categoriesToLoad(for: selectedCategory)
-        if aggregateCategories.count > 1 {
-            return try await loadAggregateResponse(categories: aggregateCategories, page: targetPage)
-        }
-
-        let response = try await repository.fetchDetailedList(
-            typeId: selectedCategory?.typeId,
-            page: targetPage,
-            keyword: nil
-        )
-
-        if response.list.isEmpty {
-            return try await repository.fetchList(
-                typeId: selectedCategory?.typeId,
-                page: targetPage,
-                keyword: nil
-            )
-        }
-
-        return response
-    }
-
-    private func categoriesToLoad(for category: VodCategory?) -> [VodCategory] {
-        guard let category else { return [] }
-
-        let children = categories
-            .filter { $0.typePid == category.typeId }
-            .sorted { $0.typeId < $1.typeId }
-
-        guard !children.isEmpty else {
-            return [category]
-        }
-
-        return [category] + children
-    }
-
-    private func loadAggregateResponse(categories: [VodCategory], page targetPage: Int) async throws -> VodListResponse {
-        var responses: [VodListResponse] = []
-
-        for category in categories {
-            let response = try await repository.fetchDetailedList(typeId: category.typeId, page: targetPage, keyword: nil)
-            responses.append(response)
-        }
-
-        var seen = Set<Int>()
-        let merged = responses
-            .flatMap(\.list)
-            .filter { item in
-                guard !seen.contains(item.id) else { return false }
-                seen.insert(item.id)
-                return true
-            }
-            .sorted {
-                ($0.vodTime ?? "") > ($1.vodTime ?? "")
-            }
-
-        let pageCount = responses.compactMap(\.pagecount).max() ?? 1
-        let total = responses.compactMap(\.total).reduce(0, +)
-
-        return VodListResponse(
-            page: targetPage,
-            pagecount: pageCount,
-            total: total,
-            list: merged
-        )
-    }
-
-    private func shouldUseRemoteCategories(from response: VodListResponse) -> Bool {
-        guard let remoteCategories = response.class, !remoteCategories.isEmpty else {
+    private func shouldUseRemoteCategories(_ remoteCategories: [VodCategory]?) -> Bool {
+        guard let remoteCategories, !remoteCategories.isEmpty else {
             return false
         }
 

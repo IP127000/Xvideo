@@ -6,6 +6,11 @@ enum AppEnvironment {
         let httpClient = URLSessionHTTPClient(session: .shared)
         let apiClient = LzizyAPIClient(httpClient: httpClient)
         let repository = DefaultLibraryRepository(apiClient: apiClient)
-        return LibraryViewModel(repository: repository)
+        let loadLibraryPage = LoadLibraryPageUseCase(repository: repository)
+        let loadMovieDetail = LoadMovieDetailUseCase(repository: repository)
+        return LibraryViewModel(
+            loadLibraryPage: loadLibraryPage,
+            loadMovieDetail: loadMovieDetail
+        )
     }
 }
