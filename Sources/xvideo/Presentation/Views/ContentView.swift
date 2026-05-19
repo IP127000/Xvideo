@@ -411,14 +411,23 @@ private struct MacVideoPlayer: NSViewRepresentable {
             nsView.player = player
         }
     }
+
+    static func dismantleNSView(_ nsView: AVPlayerView, coordinator: ()) {
+        nsView.player = nil
+    }
 }
 
 @MainActor
-private final class FullscreenPlayerWindow {
-    private static var window: NSWindow?
+private final class FullscreenPlayerWindow: NSObject, NSWindowDelegate {
+    private static var current: FullscreenPlayerWindow?
 
-    static func show(player: AVPlayer, title: String) {
-        let playerView = AVPlayerView()
+    private let playerView: AVPlayerView
+    private var window: NSWindow?
+
+    private init(player: AVPlayer, title: String) {
+        playerView = AVPlayerView()
+        super.init()
+
         playerView.player = player
         playerView.controlsStyle = .floating
         playerView.videoGravity = .resizeAspect
@@ -433,9 +442,36 @@ private final class FullscreenPlayerWindow {
         window.title = title
         window.contentView = playerView
         window.collectionBehavior = [.fullScreenPrimary]
+        window.delegate = self
+        self.window = window
+    }
+
+    static func show(player: AVPlayer, title: String) {
+        current?.close()
+
+        let controller = FullscreenPlayerWindow(player: player, title: title)
+        current = controller
+        controller.show()
+    }
+
+    private func show() {
+        guard let window else { return }
         window.makeKeyAndOrderFront(nil)
         window.toggleFullScreen(nil)
-        self.window = window
+    }
+
+    private func close() {
+        window?.delegate = nil
+        playerView.player = nil
+        window?.close()
+        window = nil
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        playerView.player = nil
+        window?.delegate = nil
+        window = nil
+        Self.current = nil
     }
 }
 
