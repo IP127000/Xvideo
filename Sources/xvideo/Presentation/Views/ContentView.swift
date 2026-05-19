@@ -441,8 +441,9 @@ private final class FullscreenPlayerWindow: NSObject, NSWindowDelegate {
         )
         window.title = title
         window.contentView = playerView
-        window.collectionBehavior = [.fullScreenPrimary]
+        window.isReleasedWhenClosed = false
         window.delegate = self
+        window.setFrame(screenFrame, display: true)
         self.window = window
     }
 
@@ -457,7 +458,6 @@ private final class FullscreenPlayerWindow: NSObject, NSWindowDelegate {
     private func show() {
         guard let window else { return }
         window.makeKeyAndOrderFront(nil)
-        window.toggleFullScreen(nil)
     }
 
     private func close() {
