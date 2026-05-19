@@ -32,7 +32,14 @@ final class LibraryViewModel: ObservableObject {
 
     var childCategories: [VodCategory] {
         guard let selectedCategory else { return [] }
-        return categories.filter { $0.typePid == selectedCategory.typeId }
+
+        let parentId = selectedCategory.typePid == 0
+            ? selectedCategory.typeId
+            : selectedCategory.typePid
+
+        return categories
+            .filter { $0.typePid == parentId }
+            .sorted { $0.typeId < $1.typeId }
     }
 
     var currentTitle: String {
