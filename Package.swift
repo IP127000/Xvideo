@@ -16,7 +16,8 @@ let package = Package(
             path: "Sources/xvideo",
             linkerSettings: [
                 .linkedFramework("AVKit"),
-                .linkedFramework("AppKit")
+                .linkedFramework("AppKit"),
+                .linkedFramework("WebKit")
             ]
         )
     ]
