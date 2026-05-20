@@ -2,7 +2,7 @@ import Foundation
 
 enum SourceParser {
     static func parsePlaybackSources(from item: VodItem) -> [PlaybackSource] {
-        let sourceNames = splitGroups(item.vodPlayFrom).map { readableSourceName($0) }
+        let sourceNames = splitSourceNames(item.vodPlayFrom)
         let groups = splitGroups(item.vodPlayURL)
 
         return groups.enumerated().compactMap { index, group in
@@ -20,6 +20,14 @@ enum SourceParser {
     private static func splitGroups(_ raw: String?) -> [String] {
         guard let raw else { return [] }
         return raw.components(separatedBy: "$$$").filter { !$0.isEmpty }
+    }
+
+    private static func splitSourceNames(_ raw: String?) -> [String] {
+        splitGroups(raw)
+            .flatMap { $0.components(separatedBy: ",") }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map { readableSourceName($0) }
     }
 
     private static func parseEpisodes(_ raw: String) -> [Episode] {
