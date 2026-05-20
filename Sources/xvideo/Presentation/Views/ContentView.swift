@@ -231,12 +231,27 @@ private struct DetailView: View {
         playbackSources.first { $0.id == selectedPlaybackSourceID } ?? playbackSources.first
     }
 
+    var nextEpisode: Episode? {
+        guard let selectedEpisode,
+              let episodes = selectedSource?.episodes,
+              let currentIndex = episodes.firstIndex(where: { $0.id == selectedEpisode.id }),
+              episodes.indices.contains(currentIndex + 1) else {
+            return nil
+        }
+
+        return episodes[currentIndex + 1]
+    }
+
     var body: some View {
         Group {
             if let movie {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
-                        PlayerPanel(episode: selectedEpisode)
+                        PlayerPanel(
+                            episode: selectedEpisode,
+                            nextEpisode: nextEpisode,
+                            playNextEpisode: playNextEpisode
+                        )
                             .frame(height: 360)
 
                         HStack(alignment: .top, spacing: 20) {
@@ -328,10 +343,18 @@ private struct DetailView: View {
             .lineLimit(3)
             .textSelection(.enabled)
     }
+
+    private func playNextEpisode() {
+        guard let nextEpisode else { return }
+        selectedEpisode = nextEpisode
+    }
 }
 
 private struct PlayerPanel: View {
     let episode: Episode?
+    let nextEpisode: Episode?
+    let playNextEpisode: () -> Void
+
     @State private var player = AVPlayer()
     @State private var currentURL: URL?
 
@@ -352,13 +375,30 @@ private struct PlayerPanel: View {
                             .padding(12)
                     }
                     .overlay(alignment: .topTrailing) {
-                        Button {
-                            FullscreenPlayerWindow.show(player: player, title: episode.title)
-                        } label: {
-                            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                .font(.system(size: 15, weight: .semibold))
-                                .frame(width: 34, height: 34)
-                                .contentShape(Rectangle())
+                        HStack(spacing: 8) {
+                            Button {
+                                playNextEpisode()
+                            } label: {
+                                Image(systemName: "forward.end.fill")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .frame(width: 34, height: 34)
+                                    .contentShape(Rectangle())
+                            }
+                            .disabled(nextEpisode == nil)
+                            .opacity(nextEpisode == nil ? 0.45 : 1)
+                            .accessibilityLabel("播放下一集")
+                            .help(nextEpisode.map { "播放下一集：\($0.title)" } ?? "没有下一集")
+
+                            Button {
+                                FullscreenPlayerWindow.show(player: player, title: episode.title)
+                            } label: {
+                                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .frame(width: 34, height: 34)
+                                    .contentShape(Rectangle())
+                            }
+                            .accessibilityLabel("打开播放窗口")
+                            .help("打开播放窗口")
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.white)
