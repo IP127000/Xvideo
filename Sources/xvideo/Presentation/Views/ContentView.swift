@@ -67,7 +67,7 @@ private struct SidebarView: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("量子资源网")
+                Text("xvideo")
                     .font(.headline)
                 Text("\(library.total) 条资源")
                     .font(.caption)

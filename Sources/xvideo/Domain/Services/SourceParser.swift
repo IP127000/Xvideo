@@ -39,9 +39,9 @@ enum SourceParser {
     private static func readableSourceName(_ raw: String) -> String {
         switch raw.lowercased() {
         case "lzm3u8":
-            return "量子 M3U8"
+            return "xvideo M3U8"
         case "liangzi":
-            return "量子在线"
+            return "xvideo 在线"
         default:
             return raw
         }
