@@ -294,7 +294,7 @@ private struct DetailView: View {
                                     Spacer()
                                     Picker("播放源", selection: Binding(
                                         get: { selectedSource?.id },
-                                        set: { selectedPlaybackSourceID = $0 }
+                                        set: { selectPlaybackSource(id: $0) }
                                     )) {
                                         ForEach(playbackSources) { source in
                                             Text(source.name).tag(source.id as PlaybackSource.ID?)
@@ -348,6 +348,14 @@ private struct DetailView: View {
         guard let nextEpisode else { return }
         selectedEpisode = nextEpisode
     }
+
+    private func selectPlaybackSource(id: PlaybackSource.ID?) {
+        selectedPlaybackSourceID = id
+        selectedEpisode = playbackSources
+            .first { $0.id == id }?
+            .episodes
+            .first
+    }
 }
 
 private struct PlayerPanel: View {
@@ -357,6 +365,7 @@ private struct PlayerPanel: View {
 
     @State private var player = AVPlayer()
     @State private var currentURL: URL?
+    @State private var loadTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -421,16 +430,31 @@ private struct PlayerPanel: View {
         .onChange(of: episode?.url) { _, _ in
             updatePlayerIfNeeded()
         }
+        .onDisappear {
+            loadTask?.cancel()
+            player.replaceCurrentItem(with: nil)
+        }
     }
 
     private func updatePlayerIfNeeded() {
         guard currentURL != episode?.url else { return }
         currentURL = episode?.url
+        loadTask?.cancel()
 
-        if let url = episode?.url {
-            player.replaceCurrentItem(with: AVPlayerItem(url: url))
-        } else {
+        guard let url = episode?.url else {
             player.replaceCurrentItem(with: nil)
+            return
+        }
+
+        player.replaceCurrentItem(with: nil)
+        loadTask = Task {
+            let playableURL = await PlaybackURLResolver.resolve(url)
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard currentURL == url else { return }
+                player.replaceCurrentItem(with: AVPlayerItem(url: playableURL))
+            }
         }
     }
 }
