@@ -322,7 +322,7 @@ private struct DetailView: View {
                     .padding(24)
                 }
             } else {
-                ContentUnavailableView("选择一部影片", systemImage: "film.stack", description: Text("左侧列表会显示来自 lzizy.net 的最新资源。"))
+                ContentUnavailableView("等待加载", systemImage: "film.stack")
             }
         }
     }
