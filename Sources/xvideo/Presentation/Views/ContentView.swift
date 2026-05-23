@@ -94,7 +94,19 @@ private struct SidebarView: View {
 
             Section("分类") {
                 ForEach(library.rootCategories) { category in
-                    categorySidebarRow(category)
+                    CategorySidebarRow(
+                        category: category,
+                        isSelected: selectedSection == .category(category.id),
+                        systemImage: iconName(for: category.typeName)
+                    ) {
+                        selectedSection = .category(category.id)
+                        searchDraft = ""
+                        Task { await library.selectCategory(category) }
+                    } openFilter: {
+                        selectedSection = .category(category.id)
+                        searchDraft = ""
+                        Task { await library.openFilterSearch(for: category) }
+                    }
                 }
             }
         }
@@ -131,35 +143,6 @@ private struct SidebarView: View {
         .listRowBackground(selectedSection == section ? Color.accentColor.opacity(0.16) : Color.clear)
     }
 
-    private func categorySidebarRow(_ category: VodCategory) -> some View {
-        HStack(spacing: 8) {
-            Button {
-                selectedSection = .category(category.id)
-                searchDraft = ""
-                Task { await library.selectCategory(category) }
-            } label: {
-                Label(category.typeName, systemImage: iconName(for: category.typeName))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                selectedSection = .category(category.id)
-                searchDraft = ""
-                Task { await library.openFilterSearch(for: category) }
-            } label: {
-                Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
-                    .labelStyle(.iconOnly)
-                    .frame(width: 26, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("打开\(category.typeName)筛选搜索")
-        }
-        .listRowBackground(selectedSection == .category(category.id) ? Color.accentColor.opacity(0.16) : Color.clear)
-    }
-
     private func iconName(for name: String) -> String {
         if name.contains("电影") { return "film" }
         if name.contains("连续") || name.contains("短剧") { return "tv" }
@@ -167,6 +150,95 @@ private struct SidebarView: View {
         if name.contains("综艺") { return "person.2.wave.2" }
         if name.contains("体育") { return "sportscourt" }
         return "rectangle.stack"
+    }
+}
+
+private struct CategorySidebarRow: View {
+    let category: VodCategory
+    let isSelected: Bool
+    let systemImage: String
+    let selectCategory: () -> Void
+    let openFilter: () -> Void
+
+    @State private var isHoveringTitle = false
+    @State private var isHoveringFilter = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(action: selectCategory) {
+                Label(category.typeName, systemImage: systemImage)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 5)
+                    .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .background {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(titleBackground)
+            }
+            .onHover { isHoveringTitle = $0 }
+
+            Button(action: openFilter) {
+                HStack(spacing: 4) {
+                    Image(systemName: "line.3.horizontal.decrease")
+                    Text("筛选")
+                }
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 5)
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(filterForeground)
+            .background {
+                Capsule()
+                    .fill(filterBackground)
+            }
+            .overlay {
+                Capsule()
+                    .stroke(filterBorder, lineWidth: 1)
+            }
+            .onHover { isHoveringFilter = $0 }
+            .help("打开\(category.typeName)筛选搜索")
+        }
+        .listRowBackground(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
+        .animation(.easeOut(duration: 0.12), value: isHoveringTitle)
+        .animation(.easeOut(duration: 0.12), value: isHoveringFilter)
+        .animation(.easeOut(duration: 0.12), value: isSelected)
+    }
+
+    private var titleBackground: Color {
+        if isHoveringTitle {
+            return Color.accentColor.opacity(isSelected ? 0.22 : 0.12)
+        }
+        if isSelected {
+            return Color.accentColor.opacity(0.14)
+        }
+        return .clear
+    }
+
+    private var filterBackground: Color {
+        if isHoveringFilter {
+            return Color.accentColor
+        }
+        if isSelected {
+            return Color.accentColor.opacity(0.18)
+        }
+        return Color(nsColor: .controlBackgroundColor)
+    }
+
+    private var filterForeground: Color {
+        isHoveringFilter ? .white : .accentColor
+    }
+
+    private var filterBorder: Color {
+        if isHoveringFilter {
+            return Color.accentColor
+        }
+        return Color.accentColor.opacity(isSelected ? 0.45 : 0.25)
     }
 }
 
@@ -227,7 +299,16 @@ private struct MovieListView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(library.childCategories) { category in
-                                childCategoryControl(category)
+                                ChildCategoryControl(
+                                    category: category,
+                                    isSelected: library.selectedCategory?.id == category.id
+                                ) {
+                                    searchDraft = ""
+                                    Task { await library.selectCategory(category) }
+                                } openFilter: {
+                                    searchDraft = ""
+                                    Task { await library.openFilterSearch(for: category) }
+                                }
                             }
                         }
                     }
@@ -265,47 +346,99 @@ private struct MovieListView: View {
             Text(library.errorMessage ?? "")
         }
     }
+}
 
-    private func childCategoryControl(_ category: VodCategory) -> some View {
-        let isSelected = library.selectedCategory?.id == category.id
+private struct ChildCategoryControl: View {
+    let category: VodCategory
+    let isSelected: Bool
+    let selectCategory: () -> Void
+    let openFilter: () -> Void
 
-        return HStack(spacing: 0) {
-            Button {
-                searchDraft = ""
-                Task { await library.selectCategory(category) }
-            } label: {
+    @State private var isHoveringTitle = false
+    @State private var isHoveringFilter = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button(action: selectCategory) {
                 Text(category.typeName)
                     .font(.callout.weight(.medium))
-                    .padding(.horizontal, 10)
+                    .lineLimit(1)
+                    .padding(.horizontal, 11)
                     .padding(.vertical, 6)
+                    .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .foregroundStyle(titleForeground)
+            .background {
+                Capsule()
+                    .fill(titleBackground)
+            }
+            .overlay {
+                Capsule()
+                    .stroke(titleBorder, lineWidth: 1)
+            }
+            .onHover { isHoveringTitle = $0 }
 
-            Divider()
-                .frame(height: 18)
-
-            Button {
-                searchDraft = ""
-                Task { await library.openFilterSearch(for: category) }
-            } label: {
-                Label("筛选", systemImage: "line.3.horizontal.decrease")
-                    .labelStyle(.iconOnly)
-                    .font(.callout.weight(.semibold))
-                    .frame(width: 34, height: 30)
-                    .contentShape(Rectangle())
+            Button(action: openFilter) {
+                HStack(spacing: 4) {
+                    Image(systemName: "line.3.horizontal.decrease")
+                    Text("筛选")
+                }
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .foregroundStyle(filterForeground)
+            .background {
+                Capsule()
+                    .fill(filterBackground)
+            }
+            .overlay {
+                Capsule()
+                    .stroke(filterBorder, lineWidth: 1)
+            }
+            .onHover { isHoveringFilter = $0 }
             .help("打开\(category.typeName)筛选搜索")
         }
-        .foregroundStyle(isSelected ? Color.white : Color.primary)
-        .background(
-            Capsule()
-                .fill(isSelected ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay {
-            Capsule()
-                .stroke(isSelected ? Color.clear : Color(nsColor: .separatorColor), lineWidth: 1)
+        .animation(.easeOut(duration: 0.12), value: isHoveringTitle)
+        .animation(.easeOut(duration: 0.12), value: isHoveringFilter)
+        .animation(.easeOut(duration: 0.12), value: isSelected)
+    }
+
+    private var titleBackground: Color {
+        if isSelected {
+            return Color.accentColor
         }
+        if isHoveringTitle {
+            return Color.accentColor.opacity(0.12)
+        }
+        return Color(nsColor: .controlBackgroundColor)
+    }
+
+    private var titleForeground: Color {
+        isSelected ? .white : .primary
+    }
+
+    private var titleBorder: Color {
+        if isSelected {
+            return Color.clear
+        }
+        return isHoveringTitle ? Color.accentColor.opacity(0.45) : Color(nsColor: .separatorColor)
+    }
+
+    private var filterBackground: Color {
+        isHoveringFilter ? Color.accentColor : Color.accentColor.opacity(0.10)
+    }
+
+    private var filterForeground: Color {
+        isHoveringFilter ? .white : .accentColor
+    }
+
+    private var filterBorder: Color {
+        isHoveringFilter ? Color.accentColor : Color.accentColor.opacity(0.25)
     }
 }
 
