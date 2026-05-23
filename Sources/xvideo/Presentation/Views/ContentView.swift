@@ -358,26 +358,23 @@ private struct ChildCategoryControl: View {
     @State private var isHoveringFilter = false
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 0) {
             Button(action: selectCategory) {
                 Text(category.typeName)
                     .font(.callout.weight(.medium))
                     .lineLimit(1)
                     .padding(.horizontal, 11)
                     .padding(.vertical, 6)
-                    .contentShape(Capsule())
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(titleForeground)
-            .background {
-                Capsule()
-                    .fill(titleBackground)
-            }
-            .overlay {
-                Capsule()
-                    .stroke(titleBorder, lineWidth: 1)
-            }
+            .background(titleSegmentBackground)
             .onHover { isHoveringTitle = $0 }
+
+            Rectangle()
+                .fill(separatorColor)
+                .frame(width: 1, height: 18)
 
             Button(action: openFilter) {
                 HStack(spacing: 4) {
@@ -388,57 +385,69 @@ private struct ChildCategoryControl: View {
                 .lineLimit(1)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 6)
-                .contentShape(Capsule())
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(filterForeground)
-            .background {
-                Capsule()
-                    .fill(filterBackground)
-            }
-            .overlay {
-                Capsule()
-                    .stroke(filterBorder, lineWidth: 1)
-            }
+            .background(filterSegmentBackground)
             .onHover { isHoveringFilter = $0 }
             .help("打开\(category.typeName)筛选搜索")
+        }
+        .background {
+            Capsule()
+                .fill(containerBackground)
+        }
+        .clipShape(Capsule())
+        .overlay {
+            Capsule()
+                .stroke(containerBorder, lineWidth: 1)
         }
         .animation(.easeOut(duration: 0.12), value: isHoveringTitle)
         .animation(.easeOut(duration: 0.12), value: isHoveringFilter)
         .animation(.easeOut(duration: 0.12), value: isSelected)
     }
 
-    private var titleBackground: Color {
-        if isSelected {
-            return Color.accentColor
-        }
+    private var containerBackground: Color {
+        isSelected ? Color.accentColor : Color(nsColor: .controlBackgroundColor)
+    }
+
+    private var containerBorder: Color {
         if isHoveringTitle {
-            return Color.accentColor.opacity(0.12)
+            return Color.accentColor.opacity(0.45)
         }
-        return Color(nsColor: .controlBackgroundColor)
+        if isHoveringFilter {
+            return Color.accentColor.opacity(isSelected ? 0.75 : 0.55)
+        }
+        return isSelected ? Color.clear : Color(nsColor: .separatorColor)
+    }
+
+    private var titleSegmentBackground: Color {
+        if isHoveringTitle {
+            return isSelected ? Color.white.opacity(0.16) : Color.accentColor.opacity(0.12)
+        }
+        return .clear
     }
 
     private var titleForeground: Color {
         isSelected ? .white : .primary
     }
 
-    private var titleBorder: Color {
-        if isSelected {
-            return Color.clear
+    private var filterSegmentBackground: Color {
+        if isHoveringFilter {
+            return isSelected ? Color.white.opacity(0.22) : Color.accentColor
         }
-        return isHoveringTitle ? Color.accentColor.opacity(0.45) : Color(nsColor: .separatorColor)
-    }
-
-    private var filterBackground: Color {
-        isHoveringFilter ? Color.accentColor : Color.accentColor.opacity(0.10)
+        return isSelected ? .clear : Color.accentColor.opacity(0.08)
     }
 
     private var filterForeground: Color {
-        isHoveringFilter ? .white : .accentColor
+        if isSelected || isHoveringFilter {
+            return .white
+        }
+        return .accentColor
     }
 
-    private var filterBorder: Color {
-        isHoveringFilter ? Color.accentColor : Color.accentColor.opacity(0.25)
+    private var separatorColor: Color {
+        isSelected ? Color.white.opacity(0.24) : Color(nsColor: .separatorColor).opacity(0.75)
     }
 }
 
