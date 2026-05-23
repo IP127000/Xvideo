@@ -56,6 +56,12 @@ struct VodCategory: Codable, Identifiable, Hashable {
 
     var id: Int { typeId }
 
+    init(typeId: Int, typePid: Int, typeName: String) {
+        self.typeId = typeId
+        self.typePid = typePid
+        self.typeName = typeName
+    }
+
     enum CodingKeys: String, CodingKey {
         case typeId = "type_id"
         case typePid = "type_pid"
@@ -76,6 +82,9 @@ struct VodItem: Codable, Identifiable, Hashable {
     let typeId: Int?
     let typeName: String?
     let vodPic: String?
+    let vodPicThumb: String?
+    let vodPicSlide: String?
+    let vodPicScreenshot: String?
     let vodRemarks: String?
     let vodArea: String?
     let vodLang: String?
@@ -106,7 +115,9 @@ struct VodItem: Codable, Identifiable, Hashable {
     }
 
     var posterURL: URL? {
-        guard let vodPic, let encoded = vodPic.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+        let posterSource = vodPicThumb?.nilIfBlank ?? vodPic?.nilIfBlank
+        guard let posterSource,
+              let encoded = posterSource.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
             return nil
         }
         return URL(string: encoded)
@@ -118,6 +129,9 @@ struct VodItem: Codable, Identifiable, Hashable {
         typeId: nil,
         typeName: nil,
         vodPic: nil,
+        vodPicThumb: nil,
+        vodPicSlide: nil,
+        vodPicScreenshot: nil,
         vodRemarks: nil,
         vodArea: nil,
         vodLang: nil,
@@ -141,6 +155,9 @@ struct VodItem: Codable, Identifiable, Hashable {
         case typeId = "type_id"
         case typeName = "type_name"
         case vodPic = "vod_pic"
+        case vodPicThumb = "vod_pic_thumb"
+        case vodPicSlide = "vod_pic_slide"
+        case vodPicScreenshot = "vod_pic_screenshot"
         case vodRemarks = "vod_remarks"
         case vodArea = "vod_area"
         case vodLang = "vod_lang"
@@ -164,6 +181,9 @@ struct VodItem: Codable, Identifiable, Hashable {
         typeId: Int?,
         typeName: String?,
         vodPic: String?,
+        vodPicThumb: String?,
+        vodPicSlide: String?,
+        vodPicScreenshot: String?,
         vodRemarks: String?,
         vodArea: String?,
         vodLang: String?,
@@ -185,6 +205,9 @@ struct VodItem: Codable, Identifiable, Hashable {
         self.typeId = typeId
         self.typeName = typeName
         self.vodPic = vodPic
+        self.vodPicThumb = vodPicThumb
+        self.vodPicSlide = vodPicSlide
+        self.vodPicScreenshot = vodPicScreenshot
         self.vodRemarks = vodRemarks
         self.vodArea = vodArea
         self.vodLang = vodLang
@@ -209,6 +232,9 @@ struct VodItem: Codable, Identifiable, Hashable {
         typeId = try container.decodeFlexibleInt(forKey: .typeId)
         typeName = try container.decodeIfPresent(String.self, forKey: .typeName)
         vodPic = try container.decodeIfPresent(String.self, forKey: .vodPic)
+        vodPicThumb = try container.decodeIfPresent(String.self, forKey: .vodPicThumb)
+        vodPicSlide = try container.decodeIfPresent(String.self, forKey: .vodPicSlide)
+        vodPicScreenshot = try container.decodeIfPresent(String.self, forKey: .vodPicScreenshot)
         vodRemarks = try container.decodeIfPresent(String.self, forKey: .vodRemarks)
         vodArea = try container.decodeIfPresent(String.self, forKey: .vodArea)
         vodLang = try container.decodeIfPresent(String.self, forKey: .vodLang)

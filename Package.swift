@@ -14,6 +14,9 @@ let package = Package(
         .executableTarget(
             name: "xvideo",
             path: "Sources/xvideo",
+            resources: [
+                .copy("Resources")
+            ],
             linkerSettings: [
                 .linkedFramework("AVKit"),
                 .linkedFramework("AppKit"),

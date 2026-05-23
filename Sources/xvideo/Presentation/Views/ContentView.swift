@@ -13,7 +13,7 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            SidebarView(selectedSection: $selectedSection)
+            SidebarView(searchDraft: $searchDraft, selectedSection: $selectedSection)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         } content: {
             Group {
@@ -69,38 +69,36 @@ private enum LibrarySection: Hashable {
 private struct SidebarView: View {
     @EnvironmentObject private var library: LibraryViewModel
     @EnvironmentObject private var favorites: FavoritesStore
+    @Binding var searchDraft: String
     @Binding var selectedSection: LibrarySection
 
     var body: some View {
-        List(selection: Binding(
-            get: { selectedSection },
-            set: { newValue in
-                guard let newValue else { return }
-                selectedSection = newValue
-
-                switch newValue {
-                case .home:
-                    Task { await library.selectCategory(nil) }
-                case .favorites:
-                    break
-                case .category(let id):
-                    let category = library.categories.first { $0.id == id }
-                    Task { await library.selectCategory(category) }
-                }
-            }
-        )) {
+        List {
             Section("媒体库") {
-                Label("最新更新", systemImage: "sparkles")
-                    .tag(LibrarySection.home)
+                sidebarButton(
+                    title: "最新更新",
+                    systemImage: "sparkles",
+                    section: .home
+                ) {
+                    Task { await library.selectCategory(nil) }
+                }
 
-                Label("我的收藏", systemImage: "heart")
-                    .tag(LibrarySection.favorites)
+                sidebarButton(
+                    title: "我的收藏",
+                    systemImage: "heart",
+                    section: .favorites
+                ) {}
             }
 
             Section("分类") {
                 ForEach(library.rootCategories) { category in
-                    Label(category.typeName, systemImage: iconName(for: category.typeName))
-                        .tag(LibrarySection.category(category.id))
+                    sidebarButton(
+                        title: category.typeName,
+                        systemImage: iconName(for: category.typeName),
+                        section: .category(category.id)
+                    ) {
+                        Task { await library.selectCategory(category) }
+                    }
                 }
             }
         }
@@ -117,6 +115,24 @@ private struct SidebarView: View {
             .padding()
             .background(.bar)
         }
+    }
+
+    private func sidebarButton(
+        title: String,
+        systemImage: String,
+        section: LibrarySection,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            selectedSection = section
+            searchDraft = ""
+            action()
+        } label: {
+            Label(title, systemImage: systemImage)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(selectedSection == section ? Color.accentColor.opacity(0.16) : Color.clear)
     }
 
     private func iconName(for name: String) -> String {
@@ -173,10 +189,19 @@ private struct MovieListView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(library.childCategories) { category in
-                                Button(category.typeName) {
-                                    Task { await library.selectCategory(category) }
+                                if library.selectedCategory?.id == category.id {
+                                    Button(category.typeName) {
+                                        searchDraft = ""
+                                        Task { await library.selectCategory(category) }
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                } else {
+                                    Button(category.typeName) {
+                                        searchDraft = ""
+                                        Task { await library.selectCategory(category) }
+                                    }
+                                    .buttonStyle(.bordered)
                                 }
-                                .buttonStyle(.bordered)
                             }
                         }
                     }

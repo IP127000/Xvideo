@@ -73,22 +73,41 @@ struct LoadLibraryPageUseCase: Sendable {
     }
 
     private func loadAggregatePage(categories: [VodCategory], page: Int) async throws -> LibraryPage {
-        let responses = try await withThrowingTaskGroup(of: VodListResponse.self) { group in
+        let responses = await withTaskGroup(of: VodListResponse?.self) { group in
             for category in categories {
                 group.addTask {
-                    try await repository.fetchDetailedList(
-                        typeId: category.typeId,
-                        page: page,
-                        keyword: nil
-                    )
+                    do {
+                        let response = try await repository.fetchDetailedList(
+                            typeId: category.typeId,
+                            page: page,
+                            keyword: nil
+                        )
+
+                        if !response.list.isEmpty {
+                            return response
+                        }
+
+                        return try await repository.fetchList(
+                            typeId: category.typeId,
+                            page: page,
+                            keyword: nil
+                        )
+                    } catch {
+                        return nil
+                    }
                 }
             }
 
             var responses: [VodListResponse] = []
-            for try await response in group {
+            for await response in group {
+                guard let response else { continue }
                 responses.append(response)
             }
             return responses
+        }
+
+        guard !responses.isEmpty else {
+            throw APIError.badResponse
         }
 
         var seen = Set<Int>()

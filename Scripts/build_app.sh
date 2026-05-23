@@ -13,6 +13,9 @@ swift build -c debug
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$ROOT_DIR/.build/debug/xvideo" "$MACOS_DIR/xvideo"
+if [ -d "$ROOT_DIR/Sources/xvideo/Resources" ]; then
+    ditto "$ROOT_DIR/Sources/xvideo/Resources" "$RESOURCES_DIR"
+fi
 
 cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -27,6 +30,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
     <string>xvideo</string>
     <key>CFBundleDisplayName</key>
     <string>xvideo</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

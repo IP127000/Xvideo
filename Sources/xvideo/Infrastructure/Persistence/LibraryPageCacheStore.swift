@@ -9,6 +9,26 @@ struct LibraryCacheKey: Codable, Hashable {
 struct CachedLibraryPage: Codable {
     let page: LibraryPage
     let loadedAt: Date
+    let isComplete: Bool
+
+    init(page: LibraryPage, loadedAt: Date, isComplete: Bool) {
+        self.page = page
+        self.loadedAt = loadedAt
+        self.isComplete = isComplete
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case page
+        case loadedAt
+        case isComplete
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        page = try container.decode(LibraryPage.self, forKey: .page)
+        loadedAt = try container.decode(Date.self, forKey: .loadedAt)
+        isComplete = try container.decodeIfPresent(Bool.self, forKey: .isComplete) ?? true
+    }
 }
 
 struct LibraryCacheSnapshot {
