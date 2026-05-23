@@ -35,15 +35,28 @@ struct ContentView: View {
             DownloadShelfView()
                 .padding(18)
         }
+        .onChange(of: library.selectedMovie?.id) { _, _ in
+            selectPreferredPlayback(for: library.selectedMovie)
+        }
         .onChange(of: library.detailMovie?.id) { _, _ in
-            let sources = SourceParser.parsePlaybackSources(from: library.detailMovie ?? library.selectedMovie ?? VodItem.placeholder)
-            let preferredSource = sources.first { $0.name.localizedCaseInsensitiveContains("M3U8") } ?? sources.first
-            selectedPlaybackSourceID = preferredSource?.id
-            selectedEpisode = preferredSource?.episodes.first
+            selectPreferredPlayback(for: library.detailMovie ?? library.selectedMovie)
         }
         .onChange(of: library.searchText) { _, newValue in
             searchDraft = newValue
         }
+    }
+
+    private func selectPreferredPlayback(for movie: VodItem?) {
+        guard let movie else {
+            selectedPlaybackSourceID = nil
+            selectedEpisode = nil
+            return
+        }
+
+        let sources = SourceParser.parsePlaybackSources(from: movie)
+        let preferredSource = sources.first { $0.name.localizedCaseInsensitiveContains("M3U8") } ?? sources.first
+        selectedPlaybackSourceID = preferredSource?.id
+        selectedEpisode = preferredSource?.episodes.first
     }
 }
 

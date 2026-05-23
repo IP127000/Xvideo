@@ -2,6 +2,7 @@ import Foundation
 
 struct LoadLibraryPageUseCase: Sendable {
     private let repository: any LibraryRepository
+    private let aggregateDisplayLimit = 60
 
     init(repository: any LibraryRepository) {
         self.repository = repository
@@ -72,15 +73,22 @@ struct LoadLibraryPageUseCase: Sendable {
     }
 
     private func loadAggregatePage(categories: [VodCategory], page: Int) async throws -> LibraryPage {
-        var responses: [VodListResponse] = []
+        let responses = try await withThrowingTaskGroup(of: VodListResponse.self) { group in
+            for category in categories {
+                group.addTask {
+                    try await repository.fetchDetailedList(
+                        typeId: category.typeId,
+                        page: page,
+                        keyword: nil
+                    )
+                }
+            }
 
-        for category in categories {
-            let response = try await repository.fetchDetailedList(
-                typeId: category.typeId,
-                page: page,
-                keyword: nil
-            )
-            responses.append(response)
+            var responses: [VodListResponse] = []
+            for try await response in group {
+                responses.append(response)
+            }
+            return responses
         }
 
         var seen = Set<Int>()
@@ -92,9 +100,10 @@ struct LoadLibraryPageUseCase: Sendable {
                 return true
             }
             .sorted { ($0.vodTime ?? "") > ($1.vodTime ?? "") }
+        let visibleItems = Array(merged.prefix(aggregateDisplayLimit))
 
         return LibraryPage(
-            items: merged,
+            items: visibleItems,
             page: page,
             pageCount: responses.compactMap(\.pagecount).max() ?? 1,
             total: responses.compactMap(\.total).reduce(0, +)

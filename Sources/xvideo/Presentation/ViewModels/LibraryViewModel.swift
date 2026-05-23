@@ -17,6 +17,8 @@ final class LibraryViewModel: ObservableObject {
 
     private let loadLibraryPage: LoadLibraryPageUseCase
     private let loadMovieDetail: LoadMovieDetailUseCase
+    private var detailCache: [Int: VodItem] = [:]
+    private var detailRequestID = UUID()
 
     init(
         loadLibraryPage: LoadLibraryPageUseCase,
@@ -78,17 +80,31 @@ final class LibraryViewModel: ObservableObject {
     }
 
     func selectMovie(_ item: VodItem) async {
-        selectedMovie = movieFromCache(matching: item) ?? item
+        let cachedListItem = movieFromCache(matching: item) ?? item
+        selectedMovie = cachedListItem
         detailMovie = nil
         isLoadingDetail = true
         errorMessage = nil
 
+        let requestID = UUID()
+        detailRequestID = requestID
+
+        if let cachedDetail = detailCache[item.id] {
+            detailMovie = cachedDetail
+            isLoadingDetail = false
+            return
+        }
+
         do {
-            detailMovie = try await loadMovieDetail.execute(
+            let loadedDetail = try await loadMovieDetail.execute(
                 item: item,
-                cachedItem: movieFromCache(matching: item)
+                cachedItem: cachedListItem
             )
+            guard detailRequestID == requestID else { return }
+            detailCache[item.id] = loadedDetail
+            detailMovie = loadedDetail
         } catch {
+            guard detailRequestID == requestID else { return }
             guard !isCancellation(error) else {
                 detailMovie = item
                 isLoadingDetail = false
@@ -105,6 +121,7 @@ final class LibraryViewModel: ObservableObject {
         isLoadingList = true
         errorMessage = nil
         if reset {
+            detailRequestID = UUID()
             movies = []
             selectedMovie = nil
             detailMovie = nil
@@ -130,6 +147,7 @@ final class LibraryViewModel: ObservableObject {
 
             if reset {
                 movies = libraryPage.items
+                isLoadingList = false
                 if let first = libraryPage.items.first {
                     await selectMovie(first)
                 } else {
@@ -138,6 +156,7 @@ final class LibraryViewModel: ObservableObject {
                 }
             } else {
                 movies.append(contentsOf: libraryPage.items)
+                isLoadingList = false
             }
         } catch {
             guard !isCancellation(error) else {
