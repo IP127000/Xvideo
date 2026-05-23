@@ -14,10 +14,12 @@ final class LibraryViewModel: ObservableObject {
     @Published var page = 1
     @Published var pageCount = 1
     @Published var total = 0
+    @Published private var posterFileURLs: [URL: URL] = [:]
 
     private let loadLibraryPage: LoadLibraryPageUseCase
     private let loadMovieDetail: LoadMovieDetailUseCase
     private let libraryCacheStore: LibraryPageCacheStore
+    private let posterCacheStore: PosterCacheStore
     private let cacheLifetime: TimeInterval = 60 * 60
     private let aggregateDisplayLimit = 60
     private static let periodicRefreshIntervalNanoseconds: UInt64 = 60 * 60 * 1_000_000_000
@@ -32,11 +34,13 @@ final class LibraryViewModel: ObservableObject {
     init(
         loadLibraryPage: LoadLibraryPageUseCase,
         loadMovieDetail: LoadMovieDetailUseCase,
-        libraryCacheStore: LibraryPageCacheStore
+        libraryCacheStore: LibraryPageCacheStore,
+        posterCacheStore: PosterCacheStore
     ) {
         self.loadLibraryPage = loadLibraryPage
         self.loadMovieDetail = loadMovieDetail
         self.libraryCacheStore = libraryCacheStore
+        self.posterCacheStore = posterCacheStore
     }
 
     deinit {
@@ -70,10 +74,15 @@ final class LibraryViewModel: ObservableObject {
         return "最新更新"
     }
 
+    func cachedPosterFileURL(for url: URL?) -> URL? {
+        guard let url else { return nil }
+        return posterFileURLs[url]
+    }
+
     func loadInitialData() async {
         guard movies.isEmpty else { return }
         await restoreLocalCache()
-        let shouldRefreshLocalCache = listCache.isEmpty || isLocalCacheExpired
+        let shouldRefreshLocalCache = listCache.isEmpty || isLocalCacheExpired || hasMissingDisplayCache
 
         if let cachedPage = cachedPage(
             category: selectedCategory,
@@ -196,12 +205,13 @@ final class LibraryViewModel: ObservableObject {
         }
 
         do {
-            let libraryPage = try await loadLibraryPage.execute(
+            let loadedPage = try await loadLibraryPage.execute(
                 selectedCategory: categorySnapshot,
                 categories: categories,
                 keyword: keywordSnapshot,
                 page: targetPage
             )
+            let libraryPage = await prepareDisplayPage(loadedPage)
 
             guard listRequestID == requestID else { return }
             listCache[key] = CachedLibraryPage(page: libraryPage, loadedAt: Date())
@@ -255,12 +265,26 @@ final class LibraryViewModel: ObservableObject {
         return Date().timeIntervalSince(oldestCacheDate) >= cacheLifetime
     }
 
+    private var hasMissingDisplayCache: Bool {
+        cachedItems.contains { item in
+            item.vodPlayURL?.nilIfBlank == nil ||
+            item.vodContent?.nilIfBlank == nil ||
+            missingCachedPoster(for: item)
+        }
+    }
+
+    private func missingCachedPoster(for item: VodItem) -> Bool {
+        guard let posterURL = item.posterURL else { return false }
+        return posterFileURLs[posterURL] == nil
+    }
+
     private func restoreLocalCache() async {
         let snapshot = await libraryCacheStore.load()
         if !snapshot.categories.isEmpty {
             categories = snapshot.categories
         }
         listCache = snapshot.pages
+        posterFileURLs = await posterCacheStore.cachedFileURLs(for: cachedPosterURLs)
     }
 
     private func scheduleLocalCacheRefresh(applyVisiblePage: Bool) {
@@ -284,12 +308,13 @@ final class LibraryViewModel: ObservableObject {
         let visibleKeyword = normalizedSearchText
 
         do {
-            let latestPage = try await loadLibraryPage.execute(
+            let loadedLatestPage = try await loadLibraryPage.execute(
                 selectedCategory: nil,
                 categories: categories,
                 keyword: "",
                 page: 1
             )
+            let latestPage = await prepareDisplayPage(loadedLatestPage)
 
             var updatedCache = listCache
             updatedCache[cacheKey(category: nil, keyword: "", page: 1)] = CachedLibraryPage(
@@ -320,6 +345,7 @@ final class LibraryViewModel: ObservableObject {
 
             listCache = updatedCache
             buildParentCategoryPages()
+            await cachePosters(for: cachedItems)
             persistLocalCache()
 
             if applyVisiblePage,
@@ -342,7 +368,7 @@ final class LibraryViewModel: ObservableObject {
     }
 
     private func fetchCategoryPages(_ categoriesToPrime: [VodCategory]) async -> [CategoryPageResult] {
-        await withTaskGroup(of: CategoryPageResult?.self) { group in
+        let rawResults = await withTaskGroup(of: CategoryPageResult?.self) { group in
             for category in categoriesToPrime {
                 group.addTask { [loadLibraryPage, categories] in
                     do {
@@ -371,6 +397,16 @@ final class LibraryViewModel: ObservableObject {
             }
             return results
         }
+
+        var preparedResults: [CategoryPageResult] = []
+        for result in rawResults {
+            let preparedPage = await prepareDisplayPage(result.cachedPage.page)
+            preparedResults.append(CategoryPageResult(
+                key: result.key,
+                cachedPage: CachedLibraryPage(page: preparedPage, loadedAt: result.cachedPage.loadedAt)
+            ))
+        }
+        return preparedResults
     }
 
     private func categoriesForLocalPreload() -> [VodCategory] {
@@ -458,6 +494,86 @@ final class LibraryViewModel: ObservableObject {
         }
     }
 
+    private func prepareDisplayPage(_ libraryPage: LibraryPage) async -> LibraryPage {
+        let items = await hydrateDetails(for: libraryPage.items)
+        await cachePosters(for: items)
+
+        return LibraryPage(
+            items: items,
+            page: libraryPage.page,
+            pageCount: libraryPage.pageCount,
+            total: libraryPage.total,
+            remoteCategories: libraryPage.remoteCategories
+        )
+    }
+
+    private func hydrateDetails(for items: [VodItem]) async -> [VodItem] {
+        let cachedItems = items.map { item in
+            detailCache[item.id] ?? movieFromCache(matching: item) ?? item
+        }
+        let itemsNeedingDetails = cachedItems.filter { item in
+            item.vodPlayURL?.nilIfBlank == nil || item.vodContent?.nilIfBlank == nil
+        }
+
+        guard !itemsNeedingDetails.isEmpty else {
+            return cachedItems
+        }
+
+        let details = await fetchDetails(for: itemsNeedingDetails)
+        guard !details.isEmpty else {
+            return cachedItems
+        }
+
+        for detail in details.values {
+            detailCache[detail.id] = detail
+        }
+
+        return cachedItems.map { details[$0.id] ?? $0 }
+    }
+
+    private func fetchDetails(for items: [VodItem]) async -> [Int: VodItem] {
+        var details: [Int: VodItem] = [:]
+
+        for batchStart in stride(from: 0, to: items.count, by: 8) {
+            let batch = Array(items[batchStart..<min(batchStart + 8, items.count)])
+            let batchDetails = await withTaskGroup(of: VodItem?.self) { group in
+                for item in batch {
+                    group.addTask { [loadMovieDetail] in
+                        try? await loadMovieDetail.execute(item: item, cachedItem: item)
+                    }
+                }
+
+                var loadedItems: [VodItem] = []
+                for await item in group {
+                    if let item {
+                        loadedItems.append(item)
+                    }
+                }
+                return loadedItems
+            }
+
+            for detail in batchDetails {
+                details[detail.id] = detail
+            }
+        }
+
+        return details
+    }
+
+    private func cachePosters(for items: [VodItem]) async {
+        let files = await posterCacheStore.cachePosters(for: items)
+        guard !files.isEmpty else { return }
+        posterFileURLs.merge(files) { current, _ in current }
+    }
+
+    private var cachedItems: [VodItem] {
+        listCache.values.flatMap(\.page.items)
+    }
+
+    private var cachedPosterURLs: [URL] {
+        cachedItems.compactMap(\.posterURL)
+    }
+
     private func shouldUseRemoteCategories(_ remoteCategories: [VodCategory]?) -> Bool {
         guard let remoteCategories, !remoteCategories.isEmpty else {
             return false
@@ -481,6 +597,10 @@ final class LibraryViewModel: ObservableObject {
     }
 
     private func movieFromCache(matching item: VodItem) -> VodItem? {
-        movies.first { $0.id == item.id && $0.vodPic?.nilIfBlank != nil }
+        if let currentItem = movies.first(where: { $0.id == item.id && $0.vodPic?.nilIfBlank != nil }) {
+            return currentItem
+        }
+
+        return cachedItems.first { $0.id == item.id && $0.vodPic?.nilIfBlank != nil }
     }
 }

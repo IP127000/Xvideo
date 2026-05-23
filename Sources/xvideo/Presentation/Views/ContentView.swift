@@ -875,31 +875,26 @@ private struct DownloadShelfView: View {
 }
 
 private struct PosterView: View {
+    @EnvironmentObject private var library: LibraryViewModel
+
     let url: URL?
     let width: CGFloat
     let height: CGFloat
 
     var body: some View {
-        AsyncImage(url: url) { phase in
-            switch phase {
-            case .empty:
-                ZStack {
-                    Rectangle().fill(Color(nsColor: .controlBackgroundColor))
-                    ProgressView()
-                }
-            case .success(let image):
-                image
+        Group {
+            if let localURL = library.cachedPosterFileURL(for: url),
+               let image = NSImage(contentsOf: localURL) {
+                Image(nsImage: image)
                     .resizable()
                     .scaledToFill()
-            case .failure:
+            } else {
                 ZStack {
                     Rectangle().fill(Color(nsColor: .controlBackgroundColor))
                     Image(systemName: "film")
                         .font(.title)
                         .foregroundStyle(.secondary)
                 }
-            @unknown default:
-                EmptyView()
             }
         }
         .frame(width: width, height: height)

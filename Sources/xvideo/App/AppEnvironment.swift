@@ -9,10 +9,12 @@ enum AppEnvironment {
         let loadLibraryPage = LoadLibraryPageUseCase(repository: repository)
         let loadMovieDetail = LoadMovieDetailUseCase(repository: repository)
         let libraryCacheStore = LibraryPageCacheStore()
+        let posterCacheStore = PosterCacheStore()
         return LibraryViewModel(
             loadLibraryPage: loadLibraryPage,
             loadMovieDetail: loadMovieDetail,
-            libraryCacheStore: libraryCacheStore
+            libraryCacheStore: libraryCacheStore,
+            posterCacheStore: posterCacheStore
         )
     }
 }
