@@ -64,8 +64,12 @@ struct LzizyAPIClient: Sendable {
             URLQueryItem(name: "ac", value: "detail"),
             URLQueryItem(name: "pg", value: "1")
         ]
-        let response: VodListResponse = try await request(components.url!)
-        return response.class?.isEmpty == false ? response.class ?? [] : Self.fallbackCategories
+        do {
+            let response: VodListResponse = try await request(components.url!)
+            return response.class?.isEmpty == false ? response.class ?? [] : Self.fallbackCategories
+        } catch {
+            return Self.fallbackCategories
+        }
     }
 
     func fetchDetail(id: Int) async throws -> VodItem {

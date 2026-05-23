@@ -92,13 +92,7 @@ private struct SidebarView: View {
 
             Section("分类") {
                 ForEach(library.rootCategories) { category in
-                    sidebarButton(
-                        title: category.typeName,
-                        systemImage: iconName(for: category.typeName),
-                        section: .category(category.id)
-                    ) {
-                        Task { await library.selectCategory(category) }
-                    }
+                    categorySidebarRow(category)
                 }
             }
         }
@@ -135,6 +129,34 @@ private struct SidebarView: View {
         .listRowBackground(selectedSection == section ? Color.accentColor.opacity(0.16) : Color.clear)
     }
 
+    private func categorySidebarRow(_ category: VodCategory) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                selectedSection = .category(category.id)
+                searchDraft = ""
+                Task { await library.selectCategory(category) }
+            } label: {
+                Label(category.typeName, systemImage: iconName(for: category.typeName))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                selectedSection = .category(category.id)
+                searchDraft = ""
+                Task { await library.showMore(for: category) }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("加载\(category.typeName)更多内容")
+        }
+        .listRowBackground(selectedSection == .category(category.id) ? Color.accentColor.opacity(0.16) : Color.clear)
+    }
+
     private func iconName(for name: String) -> String {
         if name.contains("电影") { return "film" }
         if name.contains("连续") || name.contains("短剧") { return "tv" }
@@ -156,6 +178,19 @@ private struct MovieListView: View {
                     Text(library.currentTitle)
                         .font(.title2.bold())
                     Spacer()
+                    if library.isRefreshingPreviewCache {
+                        ProgressView()
+                            .controlSize(.small)
+                            .help("正在更新本地预览")
+                    }
+                    if library.canRequestMoreForCurrentSelection {
+                        Button {
+                            Task { await library.showMore(for: library.selectedCategory) }
+                        } label: {
+                            Label("更多", systemImage: "ellipsis.circle")
+                        }
+                        .disabled(library.isLoadingList)
+                    }
                     if library.isLoadingList {
                         ProgressView()
                             .controlSize(.small)
@@ -189,19 +224,7 @@ private struct MovieListView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(library.childCategories) { category in
-                                if library.selectedCategory?.id == category.id {
-                                    Button(category.typeName) {
-                                        searchDraft = ""
-                                        Task { await library.selectCategory(category) }
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                } else {
-                                    Button(category.typeName) {
-                                        searchDraft = ""
-                                        Task { await library.selectCategory(category) }
-                                    }
-                                    .buttonStyle(.bordered)
-                                }
+                                childCategoryControl(category)
                             }
                         }
                     }
@@ -233,6 +256,47 @@ private struct MovieListView: View {
             Button("好") { library.errorMessage = nil }
         } message: {
             Text(library.errorMessage ?? "")
+        }
+    }
+
+    private func childCategoryControl(_ category: VodCategory) -> some View {
+        let isSelected = library.selectedCategory?.id == category.id
+
+        return HStack(spacing: 0) {
+            Button {
+                searchDraft = ""
+                Task { await library.selectCategory(category) }
+            } label: {
+                Text(category.typeName)
+                    .font(.callout.weight(.medium))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+
+            Divider()
+                .frame(height: 18)
+
+            Button {
+                searchDraft = ""
+                Task { await library.showMore(for: category) }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.callout.weight(.semibold))
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("加载\(category.typeName)更多内容")
+        }
+        .foregroundStyle(isSelected ? Color.white : Color.primary)
+        .background(
+            Capsule()
+                .fill(isSelected ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay {
+            Capsule()
+                .stroke(isSelected ? Color.clear : Color(nsColor: .separatorColor), lineWidth: 1)
         }
     }
 }
@@ -280,6 +344,9 @@ private struct FavoritesView: View {
                     .padding()
                 }
             }
+        }
+        .task(id: favorites.items.map(\.id)) {
+            await library.cachePosters(for: favorites.items.map(\.item))
         }
     }
 }
@@ -913,13 +980,19 @@ private struct PosterView: View {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFill()
-            } else {
-                ZStack {
-                    Rectangle().fill(Color(nsColor: .controlBackgroundColor))
-                    Image(systemName: "film")
-                        .font(.title)
-                        .foregroundStyle(.secondary)
+            } else if let url {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    default:
+                        posterPlaceholder
+                    }
                 }
+            } else {
+                posterPlaceholder
             }
         }
         .frame(width: width, height: height)
@@ -927,6 +1000,15 @@ private struct PosterView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(.separator.opacity(0.5), lineWidth: 1)
+        }
+    }
+
+    private var posterPlaceholder: some View {
+        ZStack {
+            Rectangle().fill(Color(nsColor: .controlBackgroundColor))
+            Image(systemName: "film")
+                .font(.title)
+                .foregroundStyle(.secondary)
         }
     }
 }

@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import AppKit
 
 actor PosterCacheStore {
     private let directoryURL: URL
@@ -47,8 +48,14 @@ actor PosterCacheStore {
                     }
 
                     do {
-                        let (data, _) = try await URLSession.shared.data(from: url)
-                        guard !data.isEmpty else { return nil }
+                        let (data, response) = try await URLSession.shared.data(from: url)
+                        guard let httpResponse = response as? HTTPURLResponse,
+                              (200..<300).contains(httpResponse.statusCode),
+                              httpResponse.mimeType?.hasPrefix("image/") == true,
+                              !data.isEmpty,
+                              NSImage(data: data) != nil else {
+                            return nil
+                        }
                         try data.write(to: destinationURL, options: [.atomic])
                         return (url, destinationURL)
                     } catch {

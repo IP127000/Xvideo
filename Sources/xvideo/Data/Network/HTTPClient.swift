@@ -10,7 +10,7 @@ struct URLSessionHTTPClient: HTTPClient {
 
     func get<T: Decodable>(_ url: URL, headers: [String: String]) async throws -> T {
         var request = URLRequest(url: url)
-        request.timeoutInterval = 35
+        request.timeoutInterval = 18
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
 
         let (data, response) = try await session.data(for: request)
