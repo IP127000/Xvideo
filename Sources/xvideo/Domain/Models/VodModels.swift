@@ -49,7 +49,7 @@ struct VodListResponse: Decodable {
     }
 }
 
-struct VodCategory: Decodable, Identifiable, Hashable {
+struct VodCategory: Codable, Identifiable, Hashable {
     let typeId: Int
     let typePid: Int
     let typeName: String

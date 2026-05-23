@@ -1,6 +1,6 @@
 import Foundation
 
-struct LibraryPage {
+struct LibraryPage: Codable {
     let items: [VodItem]
     let page: Int
     let pageCount: Int

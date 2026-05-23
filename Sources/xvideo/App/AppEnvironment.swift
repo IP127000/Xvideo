@@ -8,9 +8,11 @@ enum AppEnvironment {
         let repository = DefaultLibraryRepository(apiClient: apiClient)
         let loadLibraryPage = LoadLibraryPageUseCase(repository: repository)
         let loadMovieDetail = LoadMovieDetailUseCase(repository: repository)
+        let libraryCacheStore = LibraryPageCacheStore()
         return LibraryViewModel(
             loadLibraryPage: loadLibraryPage,
-            loadMovieDetail: loadMovieDetail
+            loadMovieDetail: loadMovieDetail,
+            libraryCacheStore: libraryCacheStore
         )
     }
 }

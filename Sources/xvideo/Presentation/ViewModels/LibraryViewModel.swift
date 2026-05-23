@@ -1,16 +1,5 @@
 import Foundation
 
-private struct LibraryCacheKey: Hashable {
-    let categoryID: Int?
-    let keyword: String
-    let page: Int
-}
-
-private struct CachedLibraryPage {
-    let page: LibraryPage
-    let loadedAt: Date
-}
-
 @MainActor
 final class LibraryViewModel: ObservableObject {
     @Published var categories: [VodCategory] = []
@@ -28,24 +17,31 @@ final class LibraryViewModel: ObservableObject {
 
     private let loadLibraryPage: LoadLibraryPageUseCase
     private let loadMovieDetail: LoadMovieDetailUseCase
+    private let libraryCacheStore: LibraryPageCacheStore
     private let cacheLifetime: TimeInterval = 60 * 60
+    private let aggregateDisplayLimit = 60
     private static let periodicRefreshIntervalNanoseconds: UInt64 = 60 * 60 * 1_000_000_000
     private var detailCache: [Int: VodItem] = [:]
     private var listCache: [LibraryCacheKey: CachedLibraryPage] = [:]
     private var detailRequestID = UUID()
     private var listRequestID = UUID()
     private var periodicRefreshTask: Task<Void, Never>?
+    private var cacheRefreshTask: Task<Void, Never>?
+    private var isRebuildingLocalCache = false
 
     init(
         loadLibraryPage: LoadLibraryPageUseCase,
-        loadMovieDetail: LoadMovieDetailUseCase
+        loadMovieDetail: LoadMovieDetailUseCase,
+        libraryCacheStore: LibraryPageCacheStore
     ) {
         self.loadLibraryPage = loadLibraryPage
         self.loadMovieDetail = loadMovieDetail
+        self.libraryCacheStore = libraryCacheStore
     }
 
     deinit {
         periodicRefreshTask?.cancel()
+        cacheRefreshTask?.cancel()
     }
 
     var rootCategories: [VodCategory] {
@@ -76,11 +72,30 @@ final class LibraryViewModel: ObservableObject {
 
     func loadInitialData() async {
         guard movies.isEmpty else { return }
-        await loadList(reset: true, forceRefresh: true)
+        await restoreLocalCache()
+        let shouldRefreshLocalCache = listCache.isEmpty || isLocalCacheExpired
+
+        if let cachedPage = cachedPage(
+            category: selectedCategory,
+            keyword: normalizedSearchText,
+            page: 1
+        ) {
+            await applyLibraryPage(cachedPage.page, reset: true)
+        } else {
+            await loadList(reset: true, allowRemoteFetch: true)
+        }
+
+        if shouldRefreshLocalCache {
+            scheduleLocalCacheRefresh(applyVisiblePage: false)
+        }
     }
 
     func refresh() async {
-        await loadList(reset: true, forceRefresh: true)
+        if normalizedSearchText.isEmpty {
+            await rebuildLocalCache(applyVisiblePage: true)
+        } else {
+            await loadList(reset: true, allowRemoteFetch: true)
+        }
     }
 
     func startPeriodicRefresh() {
@@ -90,7 +105,7 @@ final class LibraryViewModel: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: Self.periodicRefreshIntervalNanoseconds)
                 guard !Task.isCancelled else { return }
-                await self?.refreshVisibleCacheInBackground()
+                await self?.rebuildLocalCache(applyVisiblePage: false)
             }
         }
     }
@@ -98,17 +113,17 @@ final class LibraryViewModel: ObservableObject {
     func selectCategory(_ category: VodCategory?) async {
         selectedCategory = category
         searchText = ""
-        await loadList(reset: true, forceRefresh: false)
+        await loadList(reset: true, allowRemoteFetch: false)
     }
 
     func search() async {
         selectedCategory = nil
-        await loadList(reset: true, forceRefresh: false)
+        await loadList(reset: true, allowRemoteFetch: true)
     }
 
     func loadNextPageIfNeeded(current item: VodItem) async {
         guard item.id == movies.last?.id, page < pageCount, !isLoadingList else { return }
-        await loadList(reset: false, forceRefresh: false)
+        await loadList(reset: false, allowRemoteFetch: true)
     }
 
     func selectMovie(_ item: VodItem) async {
@@ -149,22 +164,18 @@ final class LibraryViewModel: ObservableObject {
         isLoadingDetail = false
     }
 
-    private func loadList(reset: Bool, forceRefresh: Bool) async {
+    private func loadList(reset: Bool, allowRemoteFetch: Bool) async {
         let targetPage = reset ? 1 : page + 1
         let categorySnapshot = selectedCategory
         let keywordSnapshot = normalizedSearchText
-        let key = LibraryCacheKey(
-            categoryID: categorySnapshot?.typeId,
-            keyword: keywordSnapshot,
-            page: targetPage
-        )
+        let key = cacheKey(category: categorySnapshot, keyword: keywordSnapshot, page: targetPage)
         let requestID = UUID()
         listRequestID = requestID
 
         isLoadingList = true
         errorMessage = nil
 
-        if !forceRefresh, let cachedPage = listCache[key], isFresh(cachedPage) {
+        if let cachedPage = cachedPage(category: categorySnapshot, keyword: keywordSnapshot, page: targetPage) {
             await applyLibraryPage(cachedPage.page, reset: reset)
             isLoadingList = false
             return
@@ -172,14 +183,16 @@ final class LibraryViewModel: ObservableObject {
 
         if reset {
             detailRequestID = UUID()
-            if !forceRefresh, let cachedPage = listCache[key] {
-                await applyLibraryPage(cachedPage.page, reset: true)
-                isLoadingList = true
-            } else {
-                movies = []
-                selectedMovie = nil
-                detailMovie = nil
-            }
+            movies = []
+            selectedMovie = nil
+            detailMovie = nil
+        }
+
+        guard allowRemoteFetch else {
+            errorMessage = "正在准备本地缓存，请稍后再试。"
+            isLoadingList = false
+            scheduleLocalCacheRefresh(applyVisiblePage: true)
+            return
         }
 
         do {
@@ -192,6 +205,7 @@ final class LibraryViewModel: ObservableObject {
 
             guard listRequestID == requestID else { return }
             listCache[key] = CachedLibraryPage(page: libraryPage, loadedAt: Date())
+            persistLocalCache()
             await applyLibraryPage(libraryPage, reset: reset)
         } catch {
             guard listRequestID == requestID else { return }
@@ -229,41 +243,219 @@ final class LibraryViewModel: ObservableObject {
         }
     }
 
-    private func refreshVisibleCacheInBackground() async {
-        guard !isLoadingList else { return }
-
-        let categorySnapshot = selectedCategory
-        let keywordSnapshot = normalizedSearchText
-        let key = LibraryCacheKey(
-            categoryID: categorySnapshot?.typeId,
-            keyword: keywordSnapshot,
-            page: 1
-        )
-
-        do {
-            let libraryPage = try await loadLibraryPage.execute(
-                selectedCategory: categorySnapshot,
-                categories: categories,
-                keyword: keywordSnapshot,
-                page: 1
-            )
-            listCache[key] = CachedLibraryPage(page: libraryPage, loadedAt: Date())
-
-            if shouldUseRemoteCategories(libraryPage.remoteCategories),
-               let remoteCategories = libraryPage.remoteCategories {
-                categories = remoteCategories
-            }
-        } catch {
-            guard !isCancellation(error) else { return }
-        }
-    }
-
     private var normalizedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func isFresh(_ cachedPage: CachedLibraryPage) -> Bool {
-        Date().timeIntervalSince(cachedPage.loadedAt) < cacheLifetime
+    private var isLocalCacheExpired: Bool {
+        guard let oldestCacheDate = listCache.values.map(\.loadedAt).min() else {
+            return true
+        }
+
+        return Date().timeIntervalSince(oldestCacheDate) >= cacheLifetime
+    }
+
+    private func restoreLocalCache() async {
+        let snapshot = await libraryCacheStore.load()
+        if !snapshot.categories.isEmpty {
+            categories = snapshot.categories
+        }
+        listCache = snapshot.pages
+    }
+
+    private func scheduleLocalCacheRefresh(applyVisiblePage: Bool) {
+        guard cacheRefreshTask == nil else { return }
+
+        cacheRefreshTask = Task { [weak self] in
+            await self?.rebuildLocalCache(applyVisiblePage: applyVisiblePage)
+            await MainActor.run {
+                self?.cacheRefreshTask = nil
+            }
+        }
+    }
+
+    private func rebuildLocalCache(applyVisiblePage: Bool) async {
+        guard !isRebuildingLocalCache else { return }
+
+        isRebuildingLocalCache = true
+        defer { isRebuildingLocalCache = false }
+
+        let visibleCategory = selectedCategory
+        let visibleKeyword = normalizedSearchText
+
+        do {
+            let latestPage = try await loadLibraryPage.execute(
+                selectedCategory: nil,
+                categories: categories,
+                keyword: "",
+                page: 1
+            )
+
+            var updatedCache = listCache
+            updatedCache[cacheKey(category: nil, keyword: "", page: 1)] = CachedLibraryPage(
+                page: latestPage,
+                loadedAt: Date()
+            )
+
+            if shouldUseRemoteCategories(latestPage.remoteCategories),
+               let remoteCategories = latestPage.remoteCategories {
+                categories = remoteCategories
+            }
+
+            if applyVisiblePage,
+               visibleCategory == nil,
+               visibleKeyword.isEmpty,
+               selectedCategory == nil,
+               normalizedSearchText.isEmpty {
+                listCache = updatedCache
+                await applyLibraryPage(latestPage, reset: true)
+            }
+
+            let categoriesToPrime = categoriesForLocalPreload()
+            let categoryPages = await fetchCategoryPages(categoriesToPrime)
+
+            for result in categoryPages {
+                updatedCache[result.key] = result.cachedPage
+            }
+
+            listCache = updatedCache
+            buildParentCategoryPages()
+            persistLocalCache()
+
+            if applyVisiblePage,
+               selectedCategory == visibleCategory,
+               normalizedSearchText == visibleKeyword,
+               let cachedPage = cachedPage(category: visibleCategory, keyword: visibleKeyword, page: 1) {
+                await applyLibraryPage(cachedPage.page, reset: true)
+            }
+        } catch {
+            guard !isCancellation(error) else { return }
+            if listCache.isEmpty {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private struct CategoryPageResult {
+        let key: LibraryCacheKey
+        let cachedPage: CachedLibraryPage
+    }
+
+    private func fetchCategoryPages(_ categoriesToPrime: [VodCategory]) async -> [CategoryPageResult] {
+        await withTaskGroup(of: CategoryPageResult?.self) { group in
+            for category in categoriesToPrime {
+                group.addTask { [loadLibraryPage, categories] in
+                    do {
+                        let page = try await loadLibraryPage.execute(
+                            selectedCategory: category,
+                            categories: categories,
+                            keyword: "",
+                            page: 1
+                        )
+                        let key = LibraryCacheKey(categoryID: category.typeId, keyword: "", page: 1)
+                        return CategoryPageResult(
+                            key: key,
+                            cachedPage: CachedLibraryPage(page: page, loadedAt: Date())
+                        )
+                    } catch {
+                        return nil
+                    }
+                }
+            }
+
+            var results: [CategoryPageResult] = []
+            for await result in group {
+                if let result {
+                    results.append(result)
+                }
+            }
+            return results
+        }
+    }
+
+    private func categoriesForLocalPreload() -> [VodCategory] {
+        let parentIDs = Set(categories.map(\.typePid))
+        return categories
+            .filter { category in
+                category.typeName != "演员" &&
+                category.typeName != "新闻资讯" &&
+                (category.typePid != 0 || !parentIDs.contains(category.typeId))
+            }
+            .sorted { $0.typeId < $1.typeId }
+    }
+
+    private func cachedPage(category: VodCategory?, keyword: String, page: Int) -> CachedLibraryPage? {
+        let key = cacheKey(category: category, keyword: keyword, page: page)
+        if let cachedPage = listCache[key] {
+            return cachedPage
+        }
+
+        guard keyword.isEmpty,
+              page == 1,
+              let category,
+              category.typePid == 0 else {
+            return nil
+        }
+
+        return makeParentCategoryPage(for: category)
+    }
+
+    private func buildParentCategoryPages() {
+        for category in rootCategories {
+            guard let parentPage = makeParentCategoryPage(for: category) else { continue }
+            listCache[cacheKey(category: category, keyword: "", page: 1)] = parentPage
+        }
+    }
+
+    private func makeParentCategoryPage(for category: VodCategory) -> CachedLibraryPage? {
+        let childIDs = Set(categories.filter { $0.typePid == category.typeId }.map(\.typeId))
+        guard !childIDs.isEmpty else { return nil }
+
+        let childPages = listCache.compactMap { key, cachedPage -> CachedLibraryPage? in
+            guard key.keyword.isEmpty, key.page == 1, let categoryID = key.categoryID, childIDs.contains(categoryID) else {
+                return nil
+            }
+            return cachedPage
+        }
+        guard !childPages.isEmpty else { return nil }
+
+        var seen = Set<Int>()
+        let items = childPages
+            .flatMap(\.page.items)
+            .filter { item in
+                guard !seen.contains(item.id) else { return false }
+                seen.insert(item.id)
+                return true
+            }
+            .sorted { ($0.vodTime ?? "") > ($1.vodTime ?? "") }
+
+        let page = LibraryPage(
+            items: Array(items.prefix(aggregateDisplayLimit)),
+            page: 1,
+            pageCount: childPages.map(\.page.pageCount).max() ?? 1,
+            total: childPages.map(\.page.total).reduce(0, +),
+            remoteCategories: categories
+        )
+        return CachedLibraryPage(
+            page: page,
+            loadedAt: childPages.map(\.loadedAt).min() ?? Date()
+        )
+    }
+
+    private func cacheKey(category: VodCategory?, keyword: String, page: Int) -> LibraryCacheKey {
+        LibraryCacheKey(
+            categoryID: category?.typeId,
+            keyword: keyword.trimmingCharacters(in: .whitespacesAndNewlines),
+            page: page
+        )
+    }
+
+    private func persistLocalCache() {
+        let categoriesSnapshot = categories
+        let pagesSnapshot = listCache
+        Task {
+            await libraryCacheStore.save(categories: categoriesSnapshot, pages: pagesSnapshot)
+        }
     }
 
     private func shouldUseRemoteCategories(_ remoteCategories: [VodCategory]?) -> Bool {
