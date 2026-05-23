@@ -15,6 +15,7 @@ struct XVideoApp: App {
                 .frame(minWidth: 1180, minHeight: 760)
                 .task {
                     await library.loadInitialData()
+                    library.startPeriodicRefresh()
                 }
         }
         .windowStyle(.titleBar)
