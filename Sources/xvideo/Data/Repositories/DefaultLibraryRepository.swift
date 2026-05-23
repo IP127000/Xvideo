@@ -11,12 +11,12 @@ struct DefaultLibraryRepository: LibraryRepository, Sendable {
         try await apiClient.fetchCategories()
     }
 
-    func fetchList(typeId: Int?, page: Int, keyword: String?) async throws -> VodListResponse {
-        try await apiClient.fetchList(typeId: typeId, page: page, keyword: keyword)
+    func fetchList(typeId: Int?, page: Int, keyword: String?, year: String?, area: String?) async throws -> VodListResponse {
+        try await apiClient.fetchList(typeId: typeId, page: page, keyword: keyword, year: year, area: area)
     }
 
-    func fetchDetailedList(typeId: Int?, page: Int, keyword: String?) async throws -> VodListResponse {
-        try await apiClient.fetchDetailedList(typeId: typeId, page: page, keyword: keyword)
+    func fetchDetailedList(typeId: Int?, page: Int, keyword: String?, year: String?, area: String?) async throws -> VodListResponse {
+        try await apiClient.fetchDetailedList(typeId: typeId, page: page, keyword: keyword, year: year, area: area)
     }
 
     func search(keyword: String, page: Int) async throws -> VodListResponse {

@@ -32,7 +32,9 @@ struct LoadLibraryPageUseCase: Sendable {
         let response = try await repository.fetchDetailedList(
             typeId: selectedCategory?.typeId,
             page: page,
-            keyword: nil
+            keyword: nil,
+            year: nil,
+            area: nil
         )
 
         if !response.list.isEmpty {
@@ -49,7 +51,9 @@ struct LoadLibraryPageUseCase: Sendable {
         let fallbackResponse = try await repository.fetchList(
             typeId: selectedCategory?.typeId,
             page: page,
-            keyword: nil
+            keyword: nil,
+            year: nil,
+            area: nil
         )
 
         if !fallbackResponse.list.isEmpty {
@@ -74,9 +78,13 @@ struct LoadLibraryPageUseCase: Sendable {
         selectedCategory: VodCategory?,
         categories: [VodCategory],
         keyword: String,
-        page: Int
+        page: Int,
+        year: String? = nil,
+        area: String? = nil
     ) async throws -> LibraryPage {
         let trimmedKeyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedYear = year?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+        let normalizedArea = area?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
 
         if !trimmedKeyword.isEmpty {
             let response = try await repository.search(keyword: trimmedKeyword, page: page)
@@ -91,27 +99,31 @@ struct LoadLibraryPageUseCase: Sendable {
         }
 
         let aggregateCategories = categoriesToLoad(for: selectedCategory, in: availableCategories)
-        if aggregateCategories.count > 1 {
+        if aggregateCategories.count > 1, normalizedYear == nil, normalizedArea == nil {
             return try await loadAggregatePage(categories: Array(aggregateCategories.dropFirst()), page: page)
         }
 
         let response = try await repository.fetchDetailedList(
             typeId: selectedCategory?.typeId,
             page: page,
-            keyword: nil
+            keyword: nil,
+            year: normalizedYear,
+            area: normalizedArea
         )
 
         if response.list.isEmpty {
             let fallback = try await repository.fetchList(
                 typeId: selectedCategory?.typeId,
                 page: page,
-                keyword: nil
+                keyword: nil,
+                year: normalizedYear,
+                area: normalizedArea
             )
             if !fallback.list.isEmpty {
                 return LibraryPage(response: fallback, fallbackPage: page)
             }
 
-            if aggregateCategories.count > 1 {
+            if aggregateCategories.count > 1, normalizedYear == nil, normalizedArea == nil {
                 return try await loadAggregatePage(categories: Array(aggregateCategories.dropFirst()), page: page)
             }
 
@@ -150,7 +162,9 @@ struct LoadLibraryPageUseCase: Sendable {
                         let response = try await repository.fetchDetailedList(
                             typeId: category.typeId,
                             page: page,
-                            keyword: nil
+                            keyword: nil,
+                            year: nil,
+                            area: nil
                         )
 
                         if !response.list.isEmpty {
@@ -160,7 +174,9 @@ struct LoadLibraryPageUseCase: Sendable {
                         return try await repository.fetchList(
                             typeId: category.typeId,
                             page: page,
-                            keyword: nil
+                            keyword: nil,
+                            year: nil,
+                            area: nil
                         )
                     } catch {
                         return nil
@@ -207,7 +223,9 @@ struct LoadLibraryPageUseCase: Sendable {
                         let response = try await repository.fetchDetailedList(
                             typeId: category.typeId,
                             page: page,
-                            keyword: nil
+                            keyword: nil,
+                            year: nil,
+                            area: nil
                         )
 
                         if !response.list.isEmpty {
@@ -217,7 +235,9 @@ struct LoadLibraryPageUseCase: Sendable {
                         return try await repository.fetchList(
                             typeId: category.typeId,
                             page: page,
-                            keyword: nil
+                            keyword: nil,
+                            year: nil,
+                            area: nil
                         )
                     } catch {
                         return nil

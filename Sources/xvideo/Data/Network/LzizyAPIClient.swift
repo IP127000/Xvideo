@@ -13,7 +13,13 @@ struct LzizyAPIClient: Sendable {
         self.httpClient = httpClient
     }
 
-    func fetchList(typeId: Int? = nil, page: Int = 1, keyword: String? = nil) async throws -> VodListResponse {
+    func fetchList(
+        typeId: Int? = nil,
+        page: Int = 1,
+        keyword: String? = nil,
+        year: String? = nil,
+        area: String? = nil
+    ) async throws -> VodListResponse {
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
         var items = [URLQueryItem(name: "pg", value: "\(page)")]
 
@@ -25,11 +31,19 @@ struct LzizyAPIClient: Sendable {
             items.append(URLQueryItem(name: "wd", value: keyword))
         }
 
+        appendFilterItems(to: &items, year: year, area: area)
+
         components.queryItems = items
         return try await request(components.url!)
     }
 
-    func fetchDetailedList(typeId: Int? = nil, page: Int = 1, keyword: String? = nil) async throws -> VodListResponse {
+    func fetchDetailedList(
+        typeId: Int? = nil,
+        page: Int = 1,
+        keyword: String? = nil,
+        year: String? = nil,
+        area: String? = nil
+    ) async throws -> VodListResponse {
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
         var items = [
             URLQueryItem(name: "ac", value: "detail"),
@@ -43,6 +57,8 @@ struct LzizyAPIClient: Sendable {
         if let keyword = keyword?.trimmingCharacters(in: .whitespacesAndNewlines), !keyword.isEmpty {
             items.append(URLQueryItem(name: "wd", value: keyword))
         }
+
+        appendFilterItems(to: &items, year: year, area: area)
 
         components.queryItems = items
         return try await request(components.url!)
@@ -89,6 +105,16 @@ struct LzizyAPIClient: Sendable {
 
     private func request<T: Decodable>(_ url: URL) async throws -> T {
         try await httpClient.get(url, headers: defaultHeaders)
+    }
+
+    private func appendFilterItems(to items: inout [URLQueryItem], year: String?, area: String?) {
+        if let year = year?.trimmingCharacters(in: .whitespacesAndNewlines), !year.isEmpty {
+            items.append(URLQueryItem(name: "year", value: year))
+        }
+
+        if let area = area?.trimmingCharacters(in: .whitespacesAndNewlines), !area.isEmpty {
+            items.append(URLQueryItem(name: "area", value: area))
+        }
     }
 }
 

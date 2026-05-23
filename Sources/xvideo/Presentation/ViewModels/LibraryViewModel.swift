@@ -15,6 +15,9 @@ final class LibraryViewModel: ObservableObject {
     @Published var page = 1
     @Published var pageCount = 1
     @Published var total = 0
+    @Published var filterCategory: VodCategory?
+    @Published var filterYear = ""
+    @Published var filterArea = ""
     @Published private var posterFileURLs: [URL: URL] = [:]
 
     private enum ContentMode {
@@ -100,6 +103,33 @@ final class LibraryViewModel: ObservableObject {
         normalizedSearchText.isEmpty
     }
 
+    var isShowingFilterSearch: Bool {
+        contentMode == .onlineCategory
+    }
+
+    var filterCategories: [VodCategory] {
+        guard let selectedCategory else { return rootCategories }
+
+        let parent: VodCategory
+        if selectedCategory.typePid == 0 {
+            parent = selectedCategory
+        } else if let root = categories.first(where: { $0.typeId == selectedCategory.typePid }) {
+            parent = root
+        } else {
+            parent = selectedCategory
+        }
+
+        return [parent] + visibleChildren(for: parent)
+    }
+
+    var filterYears: [String] {
+        ["", "2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018"]
+    }
+
+    var filterAreas: [String] {
+        ["", "中国大陆", "香港", "台湾", "日本", "韩国", "美国", "英国", "泰国", "其他"]
+    }
+
     func cachedPosterFileURL(for url: URL?) -> URL? {
         guard let url else { return nil }
         return posterFileURLs[url]
@@ -139,7 +169,7 @@ final class LibraryViewModel: ObservableObject {
         }
 
         if contentMode == .onlineCategory {
-            await showMore(for: selectedCategory)
+            await loadOnlineList(reset: true)
             return
         }
 
@@ -161,6 +191,9 @@ final class LibraryViewModel: ObservableObject {
     func selectCategory(_ category: VodCategory?) async {
         selectedCategory = category
         searchText = ""
+        filterCategory = category
+        filterYear = ""
+        filterArea = ""
         contentMode = .preview
         errorMessage = nil
         listRequestID = UUID()
@@ -176,15 +209,65 @@ final class LibraryViewModel: ObservableObject {
         isLoadingList = false
     }
 
-    func showMore(for category: VodCategory?) async {
+    func openFilterSearch(for category: VodCategory?) async {
         selectedCategory = category
+        filterCategory = category
+        filterYear = ""
+        filterArea = ""
         searchText = ""
         contentMode = .onlineCategory
         await loadOnlineList(reset: true)
     }
 
+    func updateFilterCategory(_ category: VodCategory?) async {
+        filterCategory = category
+        selectedCategory = category
+        contentMode = .onlineCategory
+        await loadOnlineList(reset: true)
+    }
+
+    func updateFilterYear(_ year: String) async {
+        filterYear = year
+        contentMode = .onlineCategory
+        await loadOnlineList(reset: true)
+    }
+
+    func updateFilterArea(_ area: String) async {
+        filterArea = area
+        contentMode = .onlineCategory
+        await loadOnlineList(reset: true)
+    }
+
+    func resetFilters() async {
+        filterYear = ""
+        filterArea = ""
+        contentMode = .onlineCategory
+        await loadOnlineList(reset: true)
+    }
+
+    func showFavorites(_ favorites: [FavoriteMovie]) async {
+        searchText = ""
+        selectedCategory = nil
+        filterCategory = nil
+        filterYear = ""
+        filterArea = ""
+        contentMode = .preview
+        errorMessage = nil
+
+        if let first = favorites.first {
+            await selectMovie(first.item)
+        } else {
+            detailRequestID = UUID()
+            selectedMovie = nil
+            detailMovie = nil
+        }
+    }
+
     func search() async {
         selectedCategory = nil
+        filterCategory = nil
+        filterYear = ""
+        filterArea = ""
         contentMode = .search
         await loadOnlineList(reset: true)
     }
@@ -240,8 +323,10 @@ final class LibraryViewModel: ObservableObject {
 
     private func loadOnlineList(reset: Bool) async {
         let targetPage = reset ? 1 : page + 1
-        let categorySnapshot = selectedCategory
+        let categorySnapshot = contentMode == .onlineCategory ? filterCategory : selectedCategory
         let keywordSnapshot = normalizedSearchText
+        let yearSnapshot = contentMode == .onlineCategory ? filterYear : ""
+        let areaSnapshot = contentMode == .onlineCategory ? filterArea : ""
         let requestID = UUID()
         listRequestID = requestID
 
@@ -257,7 +342,9 @@ final class LibraryViewModel: ObservableObject {
                 selectedCategory: categorySnapshot,
                 categories: categories,
                 keyword: keywordSnapshot,
-                page: targetPage
+                page: targetPage,
+                year: yearSnapshot,
+                area: areaSnapshot
             )
 
             guard listRequestID == requestID else { return }

@@ -87,7 +87,9 @@ private struct SidebarView: View {
                     title: "我的收藏",
                     systemImage: "heart",
                     section: .favorites
-                ) {}
+                ) {
+                    Task { await library.showFavorites(favorites.items) }
+                }
             }
 
             Section("分类") {
@@ -144,15 +146,16 @@ private struct SidebarView: View {
             Button {
                 selectedSection = .category(category.id)
                 searchDraft = ""
-                Task { await library.showMore(for: category) }
+                Task { await library.openFilterSearch(for: category) }
             } label: {
-                Image(systemName: "ellipsis.circle")
-                    .frame(width: 24, height: 24)
+                Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
+                    .labelStyle(.iconOnly)
+                    .frame(width: 26, height: 24)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .help("加载\(category.typeName)更多内容")
+            .help("打开\(category.typeName)筛选搜索")
         }
         .listRowBackground(selectedSection == .category(category.id) ? Color.accentColor.opacity(0.16) : Color.clear)
     }
@@ -185,9 +188,9 @@ private struct MovieListView: View {
                     }
                     if library.canRequestMoreForCurrentSelection {
                         Button {
-                            Task { await library.showMore(for: library.selectedCategory) }
+                            Task { await library.openFilterSearch(for: library.selectedCategory) }
                         } label: {
-                            Label("更多", systemImage: "ellipsis.circle")
+                            Label("筛选搜索", systemImage: "line.3.horizontal.decrease.circle")
                         }
                         .disabled(library.isLoadingList)
                     }
@@ -228,6 +231,10 @@ private struct MovieListView: View {
                             }
                         }
                     }
+                }
+
+                if library.isShowingFilterSearch {
+                    FilterSearchPanel()
                 }
             }
             .padding()
@@ -279,20 +286,113 @@ private struct MovieListView: View {
 
             Button {
                 searchDraft = ""
-                Task { await library.showMore(for: category) }
+                Task { await library.openFilterSearch(for: category) }
             } label: {
-                Image(systemName: "ellipsis")
+                Label("筛选", systemImage: "line.3.horizontal.decrease")
+                    .labelStyle(.iconOnly)
                     .font(.callout.weight(.semibold))
-                    .frame(width: 30, height: 30)
+                    .frame(width: 34, height: 30)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("加载\(category.typeName)更多内容")
+            .help("打开\(category.typeName)筛选搜索")
         }
         .foregroundStyle(isSelected ? Color.white : Color.primary)
         .background(
             Capsule()
                 .fill(isSelected ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay {
+            Capsule()
+                .stroke(isSelected ? Color.clear : Color(nsColor: .separatorColor), lineWidth: 1)
+        }
+    }
+}
+
+private struct FilterSearchPanel: View {
+    @EnvironmentObject private var library: LibraryViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            filterRow(title: "类型") {
+                ForEach(library.filterCategories) { category in
+                    filterButton(
+                        title: category.typeName,
+                        isSelected: library.filterCategory?.id == category.id
+                    ) {
+                        Task { await library.updateFilterCategory(category) }
+                    }
+                }
+            }
+
+            filterRow(title: "时间") {
+                ForEach(library.filterYears, id: \.self) { year in
+                    filterButton(
+                        title: year.isEmpty ? "全部" : year,
+                        isSelected: library.filterYear == year
+                    ) {
+                        Task { await library.updateFilterYear(year) }
+                    }
+                }
+            }
+
+            filterRow(title: "地区") {
+                ForEach(library.filterAreas, id: \.self) { area in
+                    filterButton(
+                        title: area.isEmpty ? "全部" : area,
+                        isSelected: library.filterArea == area
+                    ) {
+                        Task { await library.updateFilterArea(area) }
+                    }
+                }
+            }
+
+            HStack {
+                Label("筛选搜索", systemImage: "line.3.horizontal.decrease.circle")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("重置") {
+                    Task { await library.resetFilters() }
+                }
+                .buttonStyle(.borderless)
+                .disabled(library.filterYear.isEmpty && library.filterArea.isEmpty)
+            }
+        }
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func filterRow<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    content()
+                }
+            }
+        }
+    }
+
+    private func filterButton(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption.weight(.medium))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .frame(minWidth: 44)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isSelected ? Color.white : Color.primary)
+        .background(
+            Capsule()
+                .fill(isSelected ? Color.accentColor : Color(nsColor: .windowBackgroundColor))
         )
         .overlay {
             Capsule()
