@@ -7,16 +7,24 @@ struct ContentView: View {
     @EnvironmentObject private var downloads: DownloadManager
 
     @State private var searchDraft = ""
+    @State private var selectedSection: LibrarySection = .home
     @State private var selectedPlaybackSourceID: PlaybackSource.ID?
     @State private var selectedEpisode: Episode?
 
     var body: some View {
         NavigationSplitView {
-            SidebarView()
+            SidebarView(selectedSection: $selectedSection)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         } content: {
-            MovieListView(searchDraft: $searchDraft)
-                .navigationSplitViewColumnWidth(min: 360, ideal: 430)
+            Group {
+                switch selectedSection {
+                case .favorites:
+                    FavoritesView()
+                case .home, .category:
+                    MovieListView(searchDraft: $searchDraft)
+                }
+            }
+            .navigationSplitViewColumnWidth(min: 360, ideal: 430)
         } detail: {
             DetailView(
                 selectedPlaybackSourceID: $selectedPlaybackSourceID,
@@ -39,38 +47,56 @@ struct ContentView: View {
     }
 }
 
+private enum LibrarySection: Hashable {
+    case home
+    case favorites
+    case category(Int)
+}
+
 private struct SidebarView: View {
     @EnvironmentObject private var library: LibraryViewModel
+    @EnvironmentObject private var favorites: FavoritesStore
+    @Binding var selectedSection: LibrarySection
 
     var body: some View {
         List(selection: Binding(
-            get: { library.selectedCategory?.id },
+            get: { selectedSection },
             set: { newValue in
-                let category = library.categories.first { $0.id == newValue }
-                Task { await library.selectCategory(category) }
+                guard let newValue else { return }
+                selectedSection = newValue
+
+                switch newValue {
+                case .home:
+                    Task { await library.selectCategory(nil) }
+                case .favorites:
+                    break
+                case .category(let id):
+                    let category = library.categories.first { $0.id == id }
+                    Task { await library.selectCategory(category) }
+                }
             }
         )) {
-            Section("资源") {
-                Button {
-                    Task { await library.selectCategory(nil) }
-                } label: {
-                    Label("最新更新", systemImage: "sparkles")
-                }
-                .buttonStyle(.plain)
+            Section("媒体库") {
+                Label("最新更新", systemImage: "sparkles")
+                    .tag(LibrarySection.home)
+
+                Label("我的收藏", systemImage: "heart")
+                    .tag(LibrarySection.favorites)
             }
 
             Section("分类") {
                 ForEach(library.rootCategories) { category in
                     Label(category.typeName, systemImage: iconName(for: category.typeName))
-                        .tag(category.id as Int?)
+                        .tag(LibrarySection.category(category.id))
                 }
             }
         }
+        .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("xvideo")
                     .font(.headline)
-                Text("\(library.total) 条资源")
+                Text("\(library.total) 条资源 · \(favorites.items.count) 个收藏")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -173,7 +199,96 @@ private struct MovieListView: View {
     }
 }
 
+private struct FavoritesView: View {
+    @EnvironmentObject private var library: LibraryViewModel
+    @EnvironmentObject private var favorites: FavoritesStore
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 132, maximum: 170), spacing: 14)
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label("我的收藏", systemImage: "heart.fill")
+                        .font(.title2.bold())
+                    Spacer()
+                    Text("\(favorites.items.count) 部")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("最近收藏优先显示")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+
+            Divider()
+
+            if favorites.items.isEmpty {
+                ContentUnavailableView("暂无收藏", systemImage: "heart", description: Text("收藏内容会显示在这里。"))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
+                        ForEach(favorites.items) { favorite in
+                            FavoriteCard(favorite: favorite) {
+                                Task { await library.selectMovie(favorite.item) }
+                            }
+                        }
+                    }
+                    .padding()
+                }
+            }
+        }
+    }
+}
+
+private struct FavoriteCard: View {
+    @EnvironmentObject private var favorites: FavoritesStore
+
+    let favorite: FavoriteMovie
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                PosterView(url: favorite.item.posterURL, width: 132, height: 186)
+                    .frame(maxWidth: .infinity)
+
+                Text(favorite.item.vodName)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                HStack(spacing: 6) {
+                    if let remarks = favorite.item.vodRemarks?.nilIfBlank {
+                        Text(remarks)
+                    }
+                    if let year = favorite.item.vodYear?.nilIfBlank {
+                        Text(year)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("取消收藏", role: .destructive) {
+                favorites.toggle(favorite.item)
+            }
+        }
+    }
+}
+
 private struct MovieRow: View {
+    @EnvironmentObject private var favorites: FavoritesStore
     let item: VodItem
 
     var body: some View {
@@ -203,6 +318,14 @@ private struct MovieRow: View {
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
+
+            Spacer()
+
+            if favorites.isFavorite(item) {
+                Image(systemName: "heart.fill")
+                    .foregroundStyle(.pink)
+                    .help("已收藏")
+            }
         }
         .padding(.vertical, 6)
     }
@@ -211,6 +334,7 @@ private struct MovieRow: View {
 private struct DetailView: View {
     @EnvironmentObject private var library: LibraryViewModel
     @EnvironmentObject private var downloads: DownloadManager
+    @EnvironmentObject private var favorites: FavoritesStore
     @Binding var selectedPlaybackSourceID: PlaybackSource.ID?
     @Binding var selectedEpisode: Episode?
 
@@ -264,6 +388,18 @@ private struct DetailView: View {
                                         .font(.largeTitle.bold())
                                         .lineLimit(2)
                                     Spacer()
+                                    Button {
+                                        favorites.toggle(movie)
+                                    } label: {
+                                        Label(
+                                            favorites.isFavorite(movie) ? "已收藏" : "收藏",
+                                            systemImage: favorites.isFavorite(movie) ? "heart.fill" : "heart"
+                                        )
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(favorites.isFavorite(movie) ? .pink : .accentColor)
+                                    .help(favorites.isFavorite(movie) ? "取消收藏" : "加入收藏")
+
                                     if library.isLoadingDetail {
                                         ProgressView()
                                     }

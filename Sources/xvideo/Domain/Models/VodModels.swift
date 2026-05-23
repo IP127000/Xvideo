@@ -70,7 +70,7 @@ struct VodCategory: Decodable, Identifiable, Hashable {
     }
 }
 
-struct VodItem: Decodable, Identifiable, Hashable {
+struct VodItem: Codable, Identifiable, Hashable {
     let vodId: Int
     let vodName: String
     let typeId: Int?
