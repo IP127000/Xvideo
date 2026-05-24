@@ -128,35 +128,35 @@ struct CinematicSidebarView: View {
             Divider()
                 .overlay(CinemaTheme.separator)
 
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(CinemaTheme.softBackground)
-                        Image(systemName: "server.rack")
-                            .foregroundStyle(CinemaTheme.gold)
-                    }
-                    .frame(width: 34, height: 34)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(library.activeVideoSource.name)
-                            .font(.callout.weight(.semibold))
-                            .foregroundStyle(CinemaTheme.textPrimary)
-                            .lineLimit(1)
-                        Text("\(library.activeVideoSource.format.title) 数据源")
-                            .font(.caption2)
-                            .foregroundStyle(CinemaTheme.textSecondary)
-                    }
-
-                    Spacer()
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(CinemaTheme.softBackground)
+                    Image(systemName: "server.rack")
+                        .foregroundStyle(CinemaTheme.gold)
                 }
+                .frame(width: 34, height: 34)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(library.activeVideoSource.name)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(CinemaTheme.textPrimary)
+                        .lineLimit(1)
+                    Text("\(library.activeVideoSource.format.title) 数据源")
+                        .font(.caption2)
+                        .foregroundStyle(CinemaTheme.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
 
                 Button {
                     isShowingSourceManager = true
                 } label: {
-                    Label("配置 / 更换数据源", systemImage: "slider.horizontal.3")
-                        .font(.callout.weight(.bold))
-                        .frame(maxWidth: .infinity, minHeight: 34)
+                    Label("配置", systemImage: "slider.horizontal.3")
+                        .font(.caption.weight(.bold))
+                        .frame(height: 30)
+                        .padding(.horizontal, 10)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(CinemaTheme.textPrimary)
