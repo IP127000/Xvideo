@@ -21,6 +21,8 @@ private struct MovieListBrowserView: View {
     @EnvironmentObject private var library: LibraryViewModel
     @Binding var searchDraft: String
 
+    @State private var isHoveringHeaderMore = false
+
     var body: some View {
         VStack(spacing: 0) {
             browserHeader
@@ -98,14 +100,16 @@ private struct MovieListBrowserView: View {
                             .frame(width: 74, height: 32)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(CinemaTheme.textPrimary)
-                    .background(CinemaTheme.elevatedBackground, in: RoundedRectangle(cornerRadius: 8))
+                    .foregroundStyle(headerMoreForeground)
+                    .background(headerMoreBackground, in: RoundedRectangle(cornerRadius: 8))
                     .overlay {
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(CinemaTheme.separator, lineWidth: 1)
+                            .stroke(headerMoreBorder, lineWidth: 1)
                     }
+                    .onHover { isHoveringHeaderMore = $0 }
                     .help("打开筛选搜索")
                     .disabled(library.isLoadingList)
+                    .animation(.easeOut(duration: 0.12), value: isHoveringHeaderMore)
                 }
             }
 
@@ -133,12 +137,33 @@ private struct MovieListBrowserView: View {
         }
     }
 
+    private var headerMoreBackground: Color {
+        guard isHoveringHeaderMore, !library.isLoadingList else {
+            return CinemaTheme.elevatedBackground
+        }
+        return CinemaTheme.accent
+    }
+
+    private var headerMoreForeground: Color {
+        guard isHoveringHeaderMore, !library.isLoadingList else {
+            return CinemaTheme.textPrimary
+        }
+        return .white
+    }
+
+    private var headerMoreBorder: Color {
+        guard isHoveringHeaderMore, !library.isLoadingList else {
+            return CinemaTheme.separator
+        }
+        return CinemaTheme.accent.opacity(0.55)
+    }
+
     private var headerSubtitle: String {
         if library.isShowingFilterSearch {
             return filterSummary
         }
         if library.isShowingPreview {
-            return "每个分类优先展示本地预览，继续下拉会加载更多"
+            return "本地预览优先，点击 More 可按类型、时间、地区筛选"
         }
         return "\(library.total) 条结果"
     }
