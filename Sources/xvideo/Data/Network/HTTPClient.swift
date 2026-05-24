@@ -1,14 +1,21 @@
 import Foundation
 
 protocol HTTPClient: Sendable {
+    func data(from url: URL, headers: [String: String]) async throws -> Data
     func get<T: Decodable>(_ url: URL, headers: [String: String]) async throws -> T
+}
+
+extension HTTPClient {
+    func get<T: Decodable>(_ url: URL, headers: [String: String]) async throws -> T {
+        let data = try await data(from: url, headers: headers)
+        return try JSONDecoder().decode(T.self, from: data)
+    }
 }
 
 struct URLSessionHTTPClient: HTTPClient {
     let session: URLSession
-    private let decoder = JSONDecoder()
 
-    func get<T: Decodable>(_ url: URL, headers: [String: String]) async throws -> T {
+    func data(from url: URL, headers: [String: String]) async throws -> Data {
         var request = URLRequest(url: url)
         request.timeoutInterval = 18
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
@@ -19,6 +26,6 @@ struct URLSessionHTTPClient: HTTPClient {
             throw APIError.badResponse
         }
 
-        return try decoder.decode(T.self, from: data)
+        return data
     }
 }

@@ -47,7 +47,8 @@ actor LibraryPageCacheStore {
         let records: [CacheRecord]
     }
 
-    private let fileURL: URL
+    private let directoryURL: URL
+    private let legacyFileURL: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
@@ -55,7 +56,8 @@ actor LibraryPageCacheStore {
         let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
         let directoryURL = baseURL.appendingPathComponent("xvideo", isDirectory: true)
-        fileURL = directoryURL.appendingPathComponent("library-cache.json")
+        self.directoryURL = directoryURL
+        legacyFileURL = directoryURL.appendingPathComponent("library-cache.json")
 
         encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -67,8 +69,11 @@ actor LibraryPageCacheStore {
         try? fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
     }
 
-    func load() -> LibraryCacheSnapshot {
-        guard let data = try? Data(contentsOf: fileURL),
+    func load(sourceID: VideoSource.ID) -> LibraryCacheSnapshot {
+        let fileURL = cacheFileURL(for: sourceID)
+        let readableURL = FileManager.default.fileExists(atPath: fileURL.path) ? fileURL : legacyFallbackURL(for: sourceID)
+
+        guard let data = try? Data(contentsOf: readableURL),
               let cacheFile = try? decoder.decode(CacheFile.self, from: data) else {
             return LibraryCacheSnapshot(categories: [], pages: [:])
         }
@@ -79,7 +84,7 @@ actor LibraryPageCacheStore {
         return LibraryCacheSnapshot(categories: cacheFile.categories, pages: pages)
     }
 
-    func save(categories: [VodCategory], pages: [LibraryCacheKey: CachedLibraryPage]) {
+    func save(sourceID: VideoSource.ID, categories: [VodCategory], pages: [LibraryCacheKey: CachedLibraryPage]) {
         let records = pages
             .map { CacheRecord(key: $0.key, page: $0.value) }
             .sorted { lhs, rhs in
@@ -94,6 +99,14 @@ actor LibraryPageCacheStore {
         let cacheFile = CacheFile(categories: categories, records: records)
 
         guard let data = try? encoder.encode(cacheFile) else { return }
-        try? data.write(to: fileURL, options: [.atomic])
+        try? data.write(to: cacheFileURL(for: sourceID), options: [.atomic])
+    }
+
+    private func cacheFileURL(for sourceID: VideoSource.ID) -> URL {
+        directoryURL.appendingPathComponent("library-cache-\(sourceID.uuidString).json")
+    }
+
+    private func legacyFallbackURL(for sourceID: VideoSource.ID) -> URL {
+        sourceID == VideoSource.defaultSource.id ? legacyFileURL : cacheFileURL(for: sourceID)
     }
 }

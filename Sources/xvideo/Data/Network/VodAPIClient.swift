@@ -1,12 +1,15 @@
 import Foundation
 
-struct LzizyAPIClient: Sendable {
+struct SourceTestResult: Sendable {
+    let categoryCount: Int
+    let itemCount: Int
+}
+
+struct VodAPIClient: Sendable {
     private let httpClient: HTTPClient
-    private let baseURL = URL(string: "https://lzizy.net/api.php/provide/vod/")!
-    private let searchURL = URL(string: "https://macapi1.com/maccms/json/liangzi/")!
     private let defaultHeaders = [
         "User-Agent": "xvideo/1.0",
-        "Accept": "application/json,text/plain,*/*"
+        "Accept": "application/json,application/xml,text/xml,text/plain,*/*"
     ]
 
     init(httpClient: HTTPClient) {
@@ -14,13 +17,13 @@ struct LzizyAPIClient: Sendable {
     }
 
     func fetchList(
+        source: VideoSource,
         typeId: Int? = nil,
         page: Int = 1,
         keyword: String? = nil,
         year: String? = nil,
         area: String? = nil
     ) async throws -> VodListResponse {
-        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
         var items = [URLQueryItem(name: "pg", value: "\(page)")]
 
         if let typeId {
@@ -33,18 +36,17 @@ struct LzizyAPIClient: Sendable {
 
         appendFilterItems(to: &items, year: year, area: area)
 
-        components.queryItems = items
-        return try await request(components.url!)
+        return try await request(source: source, url: makeURL(source.apiURL, queryItems: items))
     }
 
     func fetchDetailedList(
+        source: VideoSource,
         typeId: Int? = nil,
         page: Int = 1,
         keyword: String? = nil,
         year: String? = nil,
         area: String? = nil
     ) async throws -> VodListResponse {
-        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
         var items = [
             URLQueryItem(name: "ac", value: "detail"),
             URLQueryItem(name: "pg", value: "\(page)")
@@ -60,41 +62,39 @@ struct LzizyAPIClient: Sendable {
 
         appendFilterItems(to: &items, year: year, area: area)
 
-        components.queryItems = items
-        return try await request(components.url!)
+        return try await request(source: source, url: makeURL(source.apiURL, queryItems: items))
     }
 
-    func search(keyword: String, page: Int = 1) async throws -> VodListResponse {
-        var components = URLComponents(url: searchURL, resolvingAgainstBaseURL: false)!
-        components.queryItems = [
-            URLQueryItem(name: "ac", value: "videolist"),
+    func search(source: VideoSource, keyword: String, page: Int = 1) async throws -> VodListResponse {
+        let searchURL = source.searchURL ?? source.apiURL
+        let action = source.searchURL == nil ? "detail" : "videolist"
+        let items = [
+            URLQueryItem(name: "ac", value: action),
             URLQueryItem(name: "wd", value: keyword),
             URLQueryItem(name: "pg", value: "\(page)")
         ]
-        return try await request(components.url!)
+        return try await request(source: source, url: makeURL(searchURL, queryItems: items))
     }
 
-    func fetchCategories() async throws -> [VodCategory] {
-        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
-        components.queryItems = [
+    func fetchCategories(source: VideoSource) async throws -> [VodCategory] {
+        let items = [
             URLQueryItem(name: "ac", value: "detail"),
             URLQueryItem(name: "pg", value: "1")
         ]
         do {
-            let response: VodListResponse = try await request(components.url!)
+            let response: VodListResponse = try await request(source: source, url: makeURL(source.apiURL, queryItems: items))
             return response.class?.isEmpty == false ? response.class ?? [] : Self.fallbackCategories
         } catch {
             return Self.fallbackCategories
         }
     }
 
-    func fetchDetail(id: Int) async throws -> VodItem {
-        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
-        components.queryItems = [
+    func fetchDetail(source: VideoSource, id: Int) async throws -> VodItem {
+        let items = [
             URLQueryItem(name: "ac", value: "detail"),
             URLQueryItem(name: "ids", value: "\(id)")
         ]
-        let response: VodListResponse = try await request(components.url!)
+        let response: VodListResponse = try await request(source: source, url: makeURL(source.apiURL, queryItems: items))
 
         guard let item = response.list.first else {
             throw APIError.emptyDetail
@@ -103,8 +103,53 @@ struct LzizyAPIClient: Sendable {
         return item
     }
 
-    private func request<T: Decodable>(_ url: URL) async throws -> T {
-        try await httpClient.get(url, headers: defaultHeaders)
+    func test(source: VideoSource) async throws -> SourceTestResult {
+        let items = [
+            URLQueryItem(name: "ac", value: "videolist"),
+            URLQueryItem(name: "pg", value: "1")
+        ]
+        let response: VodListResponse = try await request(source: source, url: makeURL(source.apiURL, queryItems: items))
+        let categoryCount = response.class?.count ?? 0
+
+        guard categoryCount > 0 || !response.list.isEmpty else {
+            throw APIError.badResponse
+        }
+
+        return SourceTestResult(categoryCount: categoryCount, itemCount: response.list.count)
+    }
+
+    private func request(source: VideoSource, url: URL) async throws -> VodListResponse {
+        let data = try await httpClient.data(from: url, headers: defaultHeaders)
+        return try decode(data, preferredFormat: source.format)
+    }
+
+    private func decode(_ data: Data, preferredFormat: VideoSourceFormat) throws -> VodListResponse {
+        switch preferredFormat {
+        case .json:
+            return try JSONDecoder().decode(VodListResponse.self, from: data)
+        case .xml:
+            return try VodXMLParser.parse(data)
+        case .auto:
+            if looksLikeXML(data) {
+                return try VodXMLParser.parse(data)
+            }
+            return try JSONDecoder().decode(VodListResponse.self, from: data)
+        }
+    }
+
+    private func looksLikeXML(_ data: Data) -> Bool {
+        guard let preview = String(data: data.prefix(64), encoding: .utf8) else {
+            return false
+        }
+        return preview.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<")
+    }
+
+    private func makeURL(_ url: URL, queryItems: [URLQueryItem]) -> URL {
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        var items = components.queryItems ?? []
+        items.append(contentsOf: queryItems)
+        components.queryItems = items
+        return components.url ?? url
     }
 
     private func appendFilterItems(to items: inout [URLQueryItem], year: String?, area: String?) {
@@ -118,7 +163,7 @@ struct LzizyAPIClient: Sendable {
     }
 }
 
-private extension LzizyAPIClient {
+private extension VodAPIClient {
     static let fallbackCategories: [VodCategory] = [
         VodCategory(typeId: 1, typePid: 0, typeName: "电影片"),
         VodCategory(typeId: 2, typePid: 0, typeName: "连续剧"),

@@ -50,6 +50,10 @@ enum SourceParser {
             return "xvideo M3U8"
         case "liangzi":
             return "xvideo 在线"
+        case "dyttm3u8":
+            return "电影天堂 M3U8"
+        case "dytt":
+            return "电影天堂 在线"
         default:
             return raw
         }

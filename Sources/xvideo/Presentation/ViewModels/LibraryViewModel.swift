@@ -18,6 +18,9 @@ final class LibraryViewModel: ObservableObject {
     @Published var filterCategory: VodCategory?
     @Published var filterYear = ""
     @Published var filterArea = ""
+    @Published private(set) var videoSources: [VideoSource]
+    @Published private(set) var activeVideoSourceID: VideoSource.ID
+    @Published var isSwitchingVideoSource = false
     @Published private var posterFileURLs: [URL: URL] = [:]
 
     private enum ContentMode {
@@ -35,6 +38,8 @@ final class LibraryViewModel: ObservableObject {
     private let loadMovieDetail: LoadMovieDetailUseCase
     private let libraryCacheStore: LibraryPageCacheStore
     private let posterCacheStore: PosterCacheStore
+    private let sourceStore: VideoSourceStore
+    private let repository: DefaultLibraryRepository
     private let cacheLifetime: TimeInterval = 60 * 60
     private let previewItemLimit = 10
     private let previewFetchConcurrency = 8
@@ -54,12 +59,20 @@ final class LibraryViewModel: ObservableObject {
         loadLibraryPage: LoadLibraryPageUseCase,
         loadMovieDetail: LoadMovieDetailUseCase,
         libraryCacheStore: LibraryPageCacheStore,
-        posterCacheStore: PosterCacheStore
+        posterCacheStore: PosterCacheStore,
+        sourceStore: VideoSourceStore,
+        sourceSnapshot: VideoSourceSnapshot,
+        repository: DefaultLibraryRepository
     ) {
         self.loadLibraryPage = loadLibraryPage
         self.loadMovieDetail = loadMovieDetail
         self.libraryCacheStore = libraryCacheStore
         self.posterCacheStore = posterCacheStore
+        self.sourceStore = sourceStore
+        self.repository = repository
+        videoSources = sourceSnapshot.sources
+        activeVideoSourceID = sourceSnapshot.activeSourceID
+        repository.updateSource(sourceSnapshot.activeSource)
     }
 
     deinit {
@@ -130,6 +143,10 @@ final class LibraryViewModel: ObservableObject {
         ["", "中国大陆", "香港", "台湾", "日本", "韩国", "美国", "英国", "泰国", "其他"]
     }
 
+    var activeVideoSource: VideoSource {
+        videoSources.first { $0.id == activeVideoSourceID } ?? VideoSource.defaultSource
+    }
+
     func cachedPosterFileURL(for url: URL?) -> URL? {
         guard let url else { return nil }
         return posterFileURLs[url]
@@ -143,8 +160,76 @@ final class LibraryViewModel: ObservableObject {
         posterFileURLs.merge(files) { current, _ in current }
     }
 
-    func loadInitialData() async {
-        guard movies.isEmpty else { return }
+    func addVideoSource(
+        name: String,
+        homepageURLString: String,
+        apiURLString: String,
+        format: VideoSourceFormat
+    ) async throws -> SourceTestResult {
+        let source = try makeVideoSource(
+            name: name,
+            homepageURLString: homepageURLString,
+            apiURLString: apiURLString,
+            format: format
+        )
+
+        let normalizedAPIURL = normalizedURLString(source.apiURL)
+        guard !videoSources.contains(where: { normalizedURLString($0.apiURL) == normalizedAPIURL }) else {
+            throw VideoSourceValidationError.duplicateAPIURL
+        }
+
+        let result = try await repository.testSource(source)
+        videoSources.append(source)
+        persistVideoSources()
+        await selectVideoSource(source)
+        return result
+    }
+
+    func selectVideoSource(_ source: VideoSource) async {
+        guard let storedSource = videoSources.first(where: { $0.id == source.id }),
+              storedSource.id != activeVideoSourceID else {
+            return
+        }
+
+        activeVideoSourceID = storedSource.id
+        repository.updateSource(storedSource)
+        persistVideoSources()
+        await reloadForActiveSource()
+    }
+
+    func deleteVideoSource(_ source: VideoSource) async {
+        guard !source.isBuiltIn else { return }
+
+        let wasActive = source.id == activeVideoSourceID
+        videoSources.removeAll { $0.id == source.id && !$0.isBuiltIn }
+
+        if wasActive {
+            activeVideoSourceID = VideoSource.defaultSource.id
+            repository.updateSource(activeVideoSource)
+            persistVideoSources()
+            await reloadForActiveSource()
+        } else {
+            persistVideoSources()
+        }
+    }
+
+    func testVideoSource(
+        name: String,
+        homepageURLString: String,
+        apiURLString: String,
+        format: VideoSourceFormat
+    ) async throws -> SourceTestResult {
+        let source = try makeVideoSource(
+            name: name,
+            homepageURLString: homepageURLString,
+            apiURLString: apiURLString,
+            format: format
+        )
+        return try await repository.testSource(source)
+    }
+
+    func loadInitialData(force: Bool = false) async {
+        guard force || movies.isEmpty else { return }
 
         await restoreLocalCache()
         await loadCategoriesIfNeeded()
@@ -399,6 +484,94 @@ final class LibraryViewModel: ObservableObject {
         total = 0
     }
 
+    private func reloadForActiveSource() async {
+        isSwitchingVideoSource = true
+        defer { isSwitchingVideoSource = false }
+
+        previewRefreshTask?.cancel()
+        previewRefreshTask = nil
+        resetLibraryStateForSourceChange()
+        await loadInitialData(force: true)
+    }
+
+    private func resetLibraryStateForSourceChange() {
+        detailRequestID = UUID()
+        listRequestID = UUID()
+        categories = []
+        selectedCategory = nil
+        movies = []
+        selectedMovie = nil
+        detailMovie = nil
+        searchText = ""
+        isLoadingList = false
+        isRefreshingPreviewCache = false
+        isLoadingDetail = false
+        errorMessage = nil
+        page = 1
+        pageCount = 1
+        total = 0
+        filterCategory = nil
+        filterYear = ""
+        filterArea = ""
+        posterFileURLs = [:]
+        contentMode = .preview
+        detailCache = [:]
+        previewCache = [:]
+        onlinePageCache = [:]
+        isRebuildingPreviewCache = false
+    }
+
+    private func makeVideoSource(
+        name: String,
+        homepageURLString: String,
+        apiURLString: String,
+        format: VideoSourceFormat
+    ) throws -> VideoSource {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            throw VideoSourceValidationError.emptyName
+        }
+
+        let trimmedAPIURL = apiURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let apiURL = URL(string: trimmedAPIURL),
+              let scheme = apiURL.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              apiURL.host?.isEmpty == false else {
+            throw VideoSourceValidationError.invalidAPIURL
+        }
+
+        let trimmedHomepageURL = homepageURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        let homepageURL: URL?
+        if trimmedHomepageURL.isEmpty {
+            homepageURL = nil
+        } else if let url = URL(string: trimmedHomepageURL),
+                  let scheme = url.scheme?.lowercased(),
+                  ["http", "https"].contains(scheme),
+                  url.host?.isEmpty == false {
+            homepageURL = url
+        } else {
+            throw VideoSourceValidationError.invalidHomepageURL
+        }
+
+        return VideoSource(
+            name: trimmedName,
+            homepageURL: homepageURL,
+            apiURL: apiURL,
+            format: format
+        )
+    }
+
+    private func normalizedURLString(_ url: URL) -> String {
+        url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+    }
+
+    private func persistVideoSources() {
+        sourceStore.save(sources: videoSources, activeSourceID: activeVideoSourceID)
+        let snapshot = sourceStore.load()
+        videoSources = snapshot.sources
+        activeVideoSourceID = snapshot.activeSourceID
+    }
+
     private var normalizedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -422,7 +595,7 @@ final class LibraryViewModel: ObservableObject {
     }
 
     private func restoreLocalCache() async {
-        let snapshot = await libraryCacheStore.load()
+        let snapshot = await libraryCacheStore.load(sourceID: activeVideoSourceID)
         if !snapshot.categories.isEmpty {
             categories = snapshot.categories
         }
@@ -721,8 +894,13 @@ final class LibraryViewModel: ObservableObject {
     private func persistPreviewCache() {
         let categoriesSnapshot = categories
         let pagesSnapshot = previewCache
+        let sourceID = activeVideoSourceID
         Task {
-            await libraryCacheStore.save(categories: categoriesSnapshot, pages: pagesSnapshot)
+            await libraryCacheStore.save(
+                sourceID: sourceID,
+                categories: categoriesSnapshot,
+                pages: pagesSnapshot
+            )
         }
     }
 
