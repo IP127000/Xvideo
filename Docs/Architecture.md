@@ -1,6 +1,6 @@
-# xvideo Architecture
+# Xvideo Architecture
 
-xvideo uses a lightweight Clean Architecture style. The goal is to keep API details, business rules, and SwiftUI state separate enough that future work can be changed in one layer without surprising the others.
+Xvideo uses a lightweight Clean Architecture style. The goal is to keep API details, business rules, and SwiftUI state separate enough that future work can be changed in one layer without surprising the others.
 
 ## Layers
 

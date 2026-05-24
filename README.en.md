@@ -1,8 +1,8 @@
-# xvideo
+# Xvideo
 
 [中文](README.md) | [English](README.en.md)
 
-xvideo is a native macOS video client built with SwiftUI. It fetches video lists, details, and playback sources from a media API, then presents them in a desktop-style browsing and playback experience.
+Xvideo is a native macOS video client built with SwiftUI. It fetches video lists, details, and playback sources from a media API, then presents them in a desktop-style browsing and playback experience.
 
 The project is focused on everyday watching: browsing categories, searching titles, reading details, switching episodes, saving favorites, and playing videos inside the app.
 
@@ -10,7 +10,7 @@ The project is focused on everyday watching: browsing categories, searching titl
 
 The main window keeps category browsing, filter search, details, and playback in one desktop layout.
 
-![xvideo macOS app preview](Docs/images/app-preview-blurred.png)
+![Xvideo macOS app preview](Docs/images/app-preview-blurred.png)
 
 ## Features
 
@@ -20,33 +20,33 @@ The main window keeps category browsing, filter search, details, and playback in
 - Switch between multiple playback sources, including m3u8 and web-player sources
 - Jump to the next episode from the player
 - Favorite videos and reopen them quickly from My Favorites
-- Download available mp4 resources to `~/Downloads/xvideo`
+- Download available mp4 resources to `~/Downloads/Xvideo`
 
 ## Run
 
 The project uses Swift Package Manager and requires macOS 14 or later.
 
 ```bash
-swift run xvideo
+swift run Xvideo
 ```
 
 ## Build The macOS App
 
 ```bash
 ./Scripts/build_app.sh
-open .build/app/xvideo.app
+open .build/app/Xvideo.app
 ```
 
 The build script creates:
 
 ```text
-.build/app/xvideo.app
+.build/app/Xvideo.app
 ```
 
 ## Project Structure
 
 ```text
-Sources/xvideo
+Sources/Xvideo
 ├── App                  # App entry point and dependency setup
 ├── Presentation         # SwiftUI views and view models
 ├── Domain               # Models, protocols, and playback parsing

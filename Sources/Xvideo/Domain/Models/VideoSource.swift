@@ -70,7 +70,7 @@ enum VideoSourceValidationError: LocalizedError {
 extension VideoSource {
     static let defaultSource = VideoSource(
         id: UUID(uuidString: "5E142A4B-3F31-4CC7-A2D7-10C3FBEEB620")!,
-        name: "xvideo",
+        name: "Xvideo",
         homepageURL: URL(string: "https://lzizy.net"),
         apiURL: URL(string: "https://lzizy.net/api.php/provide/vod/")!,
         searchURL: URL(string: "https://macapi1.com/maccms/json/liangzi/"),

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-APP_DIR="$ROOT_DIR/.build/app/xvideo.app"
+APP_DIR="$ROOT_DIR/.build/app/Xvideo.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
@@ -12,9 +12,9 @@ swift build -c debug
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
-cp "$ROOT_DIR/.build/debug/xvideo" "$MACOS_DIR/xvideo"
-if [ -d "$ROOT_DIR/Sources/xvideo/Resources" ]; then
-    ditto "$ROOT_DIR/Sources/xvideo/Resources" "$RESOURCES_DIR"
+cp "$ROOT_DIR/.build/debug/Xvideo" "$MACOS_DIR/Xvideo"
+if [ -d "$ROOT_DIR/Sources/Xvideo/Resources" ]; then
+    ditto "$ROOT_DIR/Sources/Xvideo/Resources" "$RESOURCES_DIR"
 fi
 
 cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
@@ -23,13 +23,13 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>xvideo</string>
+    <string>Xvideo</string>
     <key>CFBundleIdentifier</key>
     <string>com.seeker.xvideo</string>
     <key>CFBundleName</key>
-    <string>xvideo</string>
+    <string>Xvideo</string>
     <key>CFBundleDisplayName</key>
-    <string>xvideo</string>
+    <string>Xvideo</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>

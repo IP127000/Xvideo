@@ -3,17 +3,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "xvideo",
+    name: "Xvideo",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "xvideo", targets: ["xvideo"])
+        .executable(name: "Xvideo", targets: ["Xvideo"])
     ],
     targets: [
         .executableTarget(
-            name: "xvideo",
-            path: "Sources/xvideo",
+            name: "Xvideo",
+            path: "Sources/Xvideo",
             resources: [
                 .copy("Resources")
             ],

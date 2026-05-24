@@ -8,7 +8,7 @@ struct SourceTestResult: Sendable {
 struct VodAPIClient: Sendable {
     private let httpClient: HTTPClient
     private let defaultHeaders = [
-        "User-Agent": "xvideo/1.0",
+        "User-Agent": "Xvideo/1.0",
         "Accept": "application/json,application/xml,text/xml,text/plain,*/*"
     ]
 

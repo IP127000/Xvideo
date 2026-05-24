@@ -26,7 +26,7 @@ final class DownloadManager: NSObject, ObservableObject {
         tasks.insert(info, at: 0)
 
         var request = URLRequest(url: episode.url)
-        request.setValue("xvideo/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("Xvideo/1.0", forHTTPHeaderField: "User-Agent")
         let task = urlSession.downloadTask(with: request)
         taskIDs[task.taskIdentifier] = info.id
         updateTask(id: info.id) { $0.status = .downloading }
@@ -45,7 +45,7 @@ final class DownloadManager: NSObject, ObservableObject {
 
     private func destinationURL(for title: String, sourceURL: URL) -> URL {
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
-        let directory = downloads.appendingPathComponent("xvideo", isDirectory: true)
+        let directory = downloads.appendingPathComponent("Xvideo", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         let ext = sourceURL.pathExtension.nilIfBlank ?? "mp4"

@@ -65,6 +65,15 @@ struct Badge: View {
     }
 }
 
+struct MoreFilterLabel: View {
+    var body: some View {
+        Label("More", systemImage: "line.3.horizontal.decrease")
+            .font(.caption.weight(.bold))
+            .labelStyle(.titleAndIcon)
+            .lineLimit(1)
+    }
+}
+
 struct DownloadShelfView: View {
     @EnvironmentObject private var downloads: DownloadManager
 

@@ -9,7 +9,7 @@ actor PosterCacheStore {
         let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
         directoryURL = baseURL
-            .appendingPathComponent("xvideo", isDirectory: true)
+            .appendingPathComponent("Xvideo", isDirectory: true)
             .appendingPathComponent("posters", isDirectory: true)
 
         try? fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)

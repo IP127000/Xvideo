@@ -94,9 +94,8 @@ private struct MovieListBrowserView: View {
                     Button {
                         Task { await library.openFilterSearch(for: library.selectedCategory) }
                     } label: {
-                        Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
-                            .labelStyle(.iconOnly)
-                            .frame(width: 34, height: 32)
+                        MoreFilterLabel()
+                            .frame(width: 74, height: 32)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(CinemaTheme.textPrimary)
@@ -250,9 +249,8 @@ private struct ChildCategoryControl: View {
                 .frame(width: 1, height: 22)
 
             Button(action: openFilter) {
-                Image(systemName: "line.3.horizontal.decrease")
-                    .font(.system(size: 13, weight: .bold))
-                    .frame(width: 38, height: 32)
+                MoreFilterLabel()
+                    .frame(width: 68, height: 32)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

@@ -22,7 +22,7 @@ struct VideoSourceStore {
     init(fileManager: FileManager = .default) {
         let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
-        let directoryURL = baseURL.appendingPathComponent("xvideo", isDirectory: true)
+        let directoryURL = baseURL.appendingPathComponent("Xvideo", isDirectory: true)
         fileURL = directoryURL.appendingPathComponent("video-sources.json")
 
         encoder = JSONEncoder()
