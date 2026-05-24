@@ -8,9 +8,9 @@ xvideo 是一个原生 macOS 影视客户端，用 SwiftUI 写界面，通过资
 
 ## 界面预览
 
-下面的截图只展示应用布局，图片中的具体影片信息已做模糊处理。
+主界面把分类浏览、筛选搜索、详情和播放器放在同一个窗口里。
 
-![xvideo 应用界面预览，影片信息已模糊处理](Docs/images/app-preview-blurred.png)
+![xvideo macOS 应用界面预览](Docs/images/app-preview-blurred.png)
 
 ## 主要功能
 

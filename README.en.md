@@ -8,9 +8,9 @@ The project is focused on everyday watching: browsing categories, searching titl
 
 ## Preview
 
-The screenshot below shows the app layout. Specific video information in the image has been blurred.
+The main window keeps category browsing, filter search, details, and playback in one desktop layout.
 
-![xvideo app preview with blurred video details](Docs/images/app-preview-blurred.png)
+![xvideo macOS app preview](Docs/images/app-preview-blurred.png)
 
 ## Features
 
