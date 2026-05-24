@@ -163,7 +163,7 @@ private struct MovieListBrowserView: View {
             return filterSummary
         }
         if library.isShowingPreview {
-            return "本地预览优先，点击 More 可按类型、时间、地区筛选"
+            return "本地预览优先，点击 More 可筛选"
         }
         return "\(library.total) 条结果"
     }
