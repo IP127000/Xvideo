@@ -7,6 +7,7 @@ struct CinematicSidebarView: View {
     @Binding var searchDraft: String
     @Binding var selectedSection: LibrarySection
     @State private var isShowingSourceManager = false
+    @State private var isHoveringSourceSettings = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -153,23 +154,40 @@ struct CinematicSidebarView: View {
                 Button {
                     isShowingSourceManager = true
                 } label: {
-                    Label("配置", systemImage: "slider.horizontal.3")
+                    Label("配置源", systemImage: "slider.horizontal.3")
                         .font(.caption.weight(.bold))
                         .frame(height: 30)
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, 12)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(CinemaTheme.textPrimary)
-                .background(CinemaTheme.glassGradient, in: RoundedRectangle(cornerRadius: 8))
+                .foregroundStyle(sourceSettingsForeground)
+                .background(sourceSettingsBackground, in: RoundedRectangle(cornerRadius: 8))
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(CinemaTheme.separator, lineWidth: 1)
+                        .stroke(sourceSettingsBorder, lineWidth: 1)
                 }
+                .onHover { isHoveringSourceSettings = $0 }
                 .help("管理视频源")
+                .animation(.easeOut(duration: 0.12), value: isHoveringSourceSettings)
             }
         }
         .padding(14)
         .background(.black.opacity(0.16))
+    }
+
+    private var sourceSettingsBackground: some ShapeStyle {
+        if isHoveringSourceSettings {
+            return AnyShapeStyle(CinemaTheme.accent)
+        }
+        return AnyShapeStyle(CinemaTheme.glassGradient)
+    }
+
+    private var sourceSettingsForeground: Color {
+        isHoveringSourceSettings ? .white : CinemaTheme.textPrimary
+    }
+
+    private var sourceSettingsBorder: Color {
+        isHoveringSourceSettings ? CinemaTheme.accent.opacity(0.55) : CinemaTheme.separator
     }
 
     private func iconName(for name: String) -> String {
