@@ -12,7 +12,7 @@ struct XVideoApp: App {
                 .environmentObject(library)
                 .environmentObject(downloads)
                 .environmentObject(favorites)
-                .frame(minWidth: 1180, minHeight: 760)
+                .frame(minWidth: 1280, minHeight: 780)
                 .task {
                     await library.loadInitialData()
                     library.startPeriodicRefresh()
