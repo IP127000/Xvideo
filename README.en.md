@@ -6,6 +6,12 @@ xvideo is a native macOS video client built with SwiftUI. It fetches video lists
 
 The project is focused on everyday watching: browsing categories, searching titles, reading details, switching episodes, saving favorites, and playing videos inside the app.
 
+## Preview
+
+The screenshot below shows the app layout. Specific video information in the image has been blurred.
+
+![xvideo app preview with blurred video details](Docs/images/app-preview-blurred.png)
+
 ## Features
 
 - Browse latest updates and video categories
