@@ -4,14 +4,15 @@ import WebKit
 
 struct PlayerPanel: View {
     let episode: Episode?
+    let playlistEpisodes: [Episode]
     let previousEpisode: Episode?
     let nextEpisode: Episode?
     let playPreviousEpisode: () -> Void
     let playNextEpisode: () -> Void
+    let didAdvanceToEpisode: (Episode) -> Void
 
-    @State private var player = AVPlayer()
+    @StateObject private var queuePlayer = QueuePlaybackController()
     @State private var currentURL: URL?
-    @State private var loadTask: Task<Void, Never>?
     @StateObject private var navigationState = PlaybackNavigationState()
 
     var body: some View {
@@ -24,7 +25,7 @@ struct PlayerPanel: View {
                     if usesWebPlayer(episode.url) {
                         MacWebVideoPlayer(url: episode.url)
                     } else {
-                        MacVideoPlayer(player: player)
+                        MacVideoPlayer(player: queuePlayer.player)
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -46,6 +47,7 @@ struct PlayerPanel: View {
         .shadow(color: .black.opacity(0.36), radius: 26, x: 0, y: 16)
         .onAppear {
             syncNavigationState()
+            configureQueuePlayer()
             updatePlayerIfNeeded()
         }
         .onChange(of: episode?.url) { _, _ in
@@ -59,8 +61,7 @@ struct PlayerPanel: View {
             syncNavigationState()
         }
         .onDisappear {
-            loadTask?.cancel()
-            player.replaceCurrentItem(with: nil)
+            queuePlayer.stop()
         }
     }
 
@@ -111,7 +112,7 @@ struct PlayerPanel: View {
                     if usesWebPlayer(episode.url) {
                         FullscreenWebPlayerWindow.show(navigationState: navigationState)
                     } else {
-                        FullscreenPlayerWindow.show(player: player, navigationState: navigationState)
+                        FullscreenPlayerWindow.show(player: queuePlayer.player, navigationState: navigationState)
                     }
                 } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -131,41 +132,179 @@ struct PlayerPanel: View {
 
     private func syncNavigationState() {
         navigationState.currentEpisode = episode
+        navigationState.playlistEpisodes = playlistEpisodes
         navigationState.previousEpisode = previousEpisode
         navigationState.nextEpisode = nextEpisode
         navigationState.playPreviousEpisode = playPreviousEpisode
         navigationState.playNextEpisode = playNextEpisode
     }
 
+    private func configureQueuePlayer() {
+        queuePlayer.didAdvanceToEpisode = { advancedEpisode in
+            currentURL = advancedEpisode.url
+            didAdvanceToEpisode(advancedEpisode)
+        }
+    }
+
     private func updatePlayerIfNeeded() {
         guard currentURL != episode?.url else { return }
         currentURL = episode?.url
-        loadTask?.cancel()
 
-        guard let url = episode?.url else {
-            player.replaceCurrentItem(with: nil)
+        guard let episode else {
+            queuePlayer.stop()
             return
         }
 
-        guard !usesWebPlayer(url) else {
-            player.replaceCurrentItem(with: nil)
+        guard !usesWebPlayer(episode.url) else {
+            queuePlayer.stop()
             return
         }
 
-        player.replaceCurrentItem(with: nil)
-        loadTask = Task {
-            let playableURL = await PlaybackURLResolver.resolve(url)
-            guard !Task.isCancelled else { return }
+        queuePlayer.load(episode: episode, playlistEpisodes: playlistEpisodes)
+    }
 
-            await MainActor.run {
-                guard currentURL == url else { return }
-                player.replaceCurrentItem(with: AVPlayerItem(url: playableURL))
+    private func usesWebPlayer(_ url: URL) -> Bool {
+        usesWebPlayerURL(url)
+    }
+}
+
+private func usesWebPlayerURL(_ url: URL) -> Bool {
+    url.path.contains("/share/")
+}
+
+@MainActor
+private final class QueuePlaybackController: ObservableObject {
+    let player = AVQueuePlayer()
+
+    var didAdvanceToEpisode: (Episode) -> Void = { _ in }
+
+    private let lookaheadCount = 2
+    private var currentEpisodeURL: URL?
+    private var itemEpisodes: [ObjectIdentifier: Episode] = [:]
+    private var loadedEpisodeURLs = Set<URL>()
+    private var loadingEpisodeURLs = Set<URL>()
+    private var queuedEpisodes: [Episode] = []
+    private var currentItemObservation: NSKeyValueObservation?
+    private var loadTask: Task<Void, Never>?
+    private var generation = 0
+
+    init() {
+        currentItemObservation = player.observe(\.currentItem, options: [.new]) { [weak self] observedPlayer, _ in
+            let item = observedPlayer.currentItem
+            Task { @MainActor [weak self] in
+                self?.handleCurrentItemChange(item)
             }
         }
     }
 
-    private func usesWebPlayer(_ url: URL) -> Bool {
-        url.path.contains("/share/")
+    func load(episode: Episode, playlistEpisodes: [Episode]) {
+        let playableEpisodes = playableQueue(from: episode, in: playlistEpisodes)
+
+        if currentEpisodeURL == episode.url, !player.items().isEmpty {
+            queuedEpisodes = playableEpisodes
+            ensureLookahead(after: episode)
+            return
+        }
+
+        generation += 1
+        loadTask?.cancel()
+
+        let shouldResume = player.rate > 0 || player.timeControlStatus == .playing
+        currentEpisodeURL = episode.url
+        queuedEpisodes = playableEpisodes
+        itemEpisodes.removeAll()
+        loadedEpisodeURLs.removeAll()
+        loadingEpisodeURLs.removeAll()
+        player.removeAllItems()
+
+        let activeGeneration = generation
+        loadTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.appendItems(startingAt: 0, count: self.lookaheadCount, generation: activeGeneration)
+
+            if shouldResume, activeGeneration == self.generation {
+                self.player.play()
+            }
+        }
+    }
+
+    func stop() {
+        generation += 1
+        loadTask?.cancel()
+        currentEpisodeURL = nil
+        queuedEpisodes.removeAll()
+        itemEpisodes.removeAll()
+        loadedEpisodeURLs.removeAll()
+        loadingEpisodeURLs.removeAll()
+        player.pause()
+        player.removeAllItems()
+    }
+
+    private func playableQueue(from episode: Episode, in playlistEpisodes: [Episode]) -> [Episode] {
+        let nonWebEpisodes = playlistEpisodes.filter { !usesWebPlayerURL($0.url) }
+        guard let selectedIndex = nonWebEpisodes.firstIndex(where: { $0.id == episode.id }) else {
+            return [episode]
+        }
+
+        return Array(nonWebEpisodes[selectedIndex...])
+    }
+
+    private func handleCurrentItemChange(_ item: AVPlayerItem?) {
+        guard let item,
+              let episode = itemEpisodes[ObjectIdentifier(item)] else {
+            return
+        }
+
+        ensureLookahead(after: episode)
+
+        guard currentEpisodeURL != episode.url else { return }
+        currentEpisodeURL = episode.url
+        didAdvanceToEpisode(episode)
+    }
+
+    private func ensureLookahead(after episode: Episode) {
+        guard let currentIndex = queuedEpisodes.firstIndex(where: { $0.id == episode.id }) else {
+            return
+        }
+
+        let activeGeneration = generation
+        loadTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.appendItems(
+                startingAt: currentIndex + 1,
+                count: self.lookaheadCount,
+                generation: activeGeneration
+            )
+        }
+    }
+
+    private func appendItems(startingAt startIndex: Int, count: Int, generation activeGeneration: Int) async {
+        guard startIndex < queuedEpisodes.endIndex else { return }
+
+        let endIndex = min(queuedEpisodes.endIndex, startIndex + count)
+        for index in startIndex..<endIndex {
+            guard activeGeneration == generation, !Task.isCancelled else { return }
+
+            let episode = queuedEpisodes[index]
+            guard !loadedEpisodeURLs.contains(episode.url),
+                  !loadingEpisodeURLs.contains(episode.url) else {
+                continue
+            }
+
+            loadingEpisodeURLs.insert(episode.url)
+            let playableURL = await PlaybackURLResolver.resolve(episode.url)
+            loadingEpisodeURLs.remove(episode.url)
+
+            guard activeGeneration == generation, !Task.isCancelled else { return }
+
+            let item = AVPlayerItem(url: playableURL)
+            itemEpisodes[ObjectIdentifier(item)] = episode
+            loadedEpisodeURLs.insert(episode.url)
+
+            if player.canInsert(item, after: nil) {
+                player.insert(item, after: nil)
+            }
+        }
     }
 }
 
@@ -235,6 +374,7 @@ private struct MacWebVideoPlayer: NSViewRepresentable {
 @MainActor
 private final class PlaybackNavigationState: ObservableObject {
     @Published var currentEpisode: Episode?
+    @Published var playlistEpisodes: [Episode] = []
     @Published var previousEpisode: Episode?
     @Published var nextEpisode: Episode?
 

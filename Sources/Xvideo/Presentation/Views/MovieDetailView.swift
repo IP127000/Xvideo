@@ -55,10 +55,12 @@ struct MovieDetailView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         PlayerPanel(
                             episode: selectedEpisode,
+                            playlistEpisodes: selectedSource?.episodes ?? [],
                             previousEpisode: previousEpisode,
                             nextEpisode: nextEpisode,
                             playPreviousEpisode: playPreviousEpisode,
-                            playNextEpisode: playNextEpisode
+                            playNextEpisode: playNextEpisode,
+                            didAdvanceToEpisode: { selectedEpisode = $0 }
                         )
                         .frame(minHeight: 380, idealHeight: 430)
 
