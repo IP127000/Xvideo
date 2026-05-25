@@ -4,12 +4,15 @@ import WebKit
 
 struct PlayerPanel: View {
     let episode: Episode?
+    let previousEpisode: Episode?
     let nextEpisode: Episode?
+    let playPreviousEpisode: () -> Void
     let playNextEpisode: () -> Void
 
     @State private var player = AVPlayer()
     @State private var currentURL: URL?
     @State private var loadTask: Task<Void, Never>?
+    @StateObject private var navigationState = PlaybackNavigationState()
 
     var body: some View {
         ZStack {
@@ -42,10 +45,18 @@ struct PlayerPanel: View {
         }
         .shadow(color: .black.opacity(0.36), radius: 26, x: 0, y: 16)
         .onAppear {
+            syncNavigationState()
             updatePlayerIfNeeded()
         }
         .onChange(of: episode?.url) { _, _ in
+            syncNavigationState()
             updatePlayerIfNeeded()
+        }
+        .onChange(of: previousEpisode?.id) { _, _ in
+            syncNavigationState()
+        }
+        .onChange(of: nextEpisode?.id) { _, _ in
+            syncNavigationState()
         }
         .onDisappear {
             loadTask?.cancel()
@@ -70,6 +81,19 @@ struct PlayerPanel: View {
 
             HStack(spacing: 8) {
                 Button {
+                    playPreviousEpisode()
+                } label: {
+                    Image(systemName: "backward.end.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 34, height: 34)
+                        .contentShape(Rectangle())
+                }
+                .disabled(previousEpisode == nil)
+                .opacity(previousEpisode == nil ? 0.45 : 1)
+                .accessibilityLabel("播放上一集")
+                .help(previousEpisode.map { "播放上一集：\($0.title)" } ?? "没有上一集")
+
+                Button {
                     playNextEpisode()
                 } label: {
                     Image(systemName: "forward.end.fill")
@@ -83,10 +107,11 @@ struct PlayerPanel: View {
                 .help(nextEpisode.map { "播放下一集：\($0.title)" } ?? "没有下一集")
 
                 Button {
+                    syncNavigationState()
                     if usesWebPlayer(episode.url) {
-                        FullscreenWebPlayerWindow.show(url: episode.url, title: episode.title)
+                        FullscreenWebPlayerWindow.show(navigationState: navigationState)
                     } else {
-                        FullscreenPlayerWindow.show(player: player, title: episode.title)
+                        FullscreenPlayerWindow.show(player: player, navigationState: navigationState)
                     }
                 } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -102,6 +127,14 @@ struct PlayerPanel: View {
             .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 8))
         }
         .padding(12)
+    }
+
+    private func syncNavigationState() {
+        navigationState.currentEpisode = episode
+        navigationState.previousEpisode = previousEpisode
+        navigationState.nextEpisode = nextEpisode
+        navigationState.playPreviousEpisode = playPreviousEpisode
+        navigationState.playNextEpisode = playNextEpisode
     }
 
     private func updatePlayerIfNeeded() {
@@ -200,19 +233,116 @@ private struct MacWebVideoPlayer: NSViewRepresentable {
 }
 
 @MainActor
+private final class PlaybackNavigationState: ObservableObject {
+    @Published var currentEpisode: Episode?
+    @Published var previousEpisode: Episode?
+    @Published var nextEpisode: Episode?
+
+    var playPreviousEpisode: () -> Void = {}
+    var playNextEpisode: () -> Void = {}
+}
+
+private struct FullscreenVideoPlayerContent: View {
+    let player: AVPlayer
+    @ObservedObject var navigationState: PlaybackNavigationState
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Color.black
+                .ignoresSafeArea()
+
+            MacVideoPlayer(player: player)
+                .ignoresSafeArea()
+
+            FullscreenPlaybackBar(navigationState: navigationState)
+        }
+    }
+}
+
+private struct FullscreenWebPlayerContent: View {
+    @ObservedObject var navigationState: PlaybackNavigationState
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Color.black
+                .ignoresSafeArea()
+
+            if let url = navigationState.currentEpisode?.url {
+                MacWebVideoPlayer(url: url)
+                    .ignoresSafeArea()
+            }
+
+            FullscreenPlaybackBar(navigationState: navigationState)
+        }
+    }
+}
+
+private struct FullscreenPlaybackBar: View {
+    @ObservedObject var navigationState: PlaybackNavigationState
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "play.fill")
+                    .font(.caption)
+                Text(navigationState.currentEpisode?.title ?? "播放中")
+                    .font(.caption.bold())
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(.black.opacity(0.64), in: Capsule())
+
+            Spacer()
+
+            HStack(spacing: 8) {
+                Button {
+                    navigationState.playPreviousEpisode()
+                } label: {
+                    Image(systemName: "backward.end.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 36, height: 34)
+                        .contentShape(Rectangle())
+                }
+                .disabled(navigationState.previousEpisode == nil)
+                .opacity(navigationState.previousEpisode == nil ? 0.45 : 1)
+                .accessibilityLabel("播放上一集")
+                .help(navigationState.previousEpisode.map { "播放上一集：\($0.title)" } ?? "没有上一集")
+
+                Button {
+                    navigationState.playNextEpisode()
+                } label: {
+                    Image(systemName: "forward.end.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 36, height: 34)
+                        .contentShape(Rectangle())
+                }
+                .disabled(navigationState.nextEpisode == nil)
+                .opacity(navigationState.nextEpisode == nil ? 0.45 : 1)
+                .accessibilityLabel("播放下一集")
+                .help(navigationState.nextEpisode.map { "播放下一集：\($0.title)" } ?? "没有下一集")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .background(.black.opacity(0.64), in: RoundedRectangle(cornerRadius: 8))
+        }
+        .padding(16)
+    }
+}
+
+@MainActor
 private final class FullscreenPlayerWindow: NSObject, NSWindowDelegate {
     private static var current: FullscreenPlayerWindow?
 
-    private let playerView: AVPlayerView
+    private let hostingView: NSHostingView<FullscreenVideoPlayerContent>
     private var window: NSWindow?
 
-    private init(player: AVPlayer, title: String) {
-        playerView = AVPlayerView()
+    private init(player: AVPlayer, navigationState: PlaybackNavigationState) {
+        hostingView = NSHostingView(rootView: FullscreenVideoPlayerContent(
+            player: player,
+            navigationState: navigationState
+        ))
         super.init()
-
-        playerView.player = player
-        playerView.controlsStyle = .floating
-        playerView.videoGravity = .resizeAspect
 
         let screenFrame = NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1280, height: 720)
         let window = NSWindow(
@@ -221,18 +351,18 @@ private final class FullscreenPlayerWindow: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = title
-        window.contentView = playerView
+        window.title = navigationState.currentEpisode?.title ?? "播放窗口"
+        window.contentView = hostingView
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.setFrame(screenFrame, display: true)
         self.window = window
     }
 
-    static func show(player: AVPlayer, title: String) {
+    static func show(player: AVPlayer, navigationState: PlaybackNavigationState) {
         current?.close()
 
-        let controller = FullscreenPlayerWindow(player: player, title: title)
+        let controller = FullscreenPlayerWindow(player: player, navigationState: navigationState)
         current = controller
         controller.show()
     }
@@ -244,13 +374,13 @@ private final class FullscreenPlayerWindow: NSObject, NSWindowDelegate {
 
     private func close() {
         window?.delegate = nil
-        playerView.player = nil
+        window?.contentView = nil
         window?.close()
         window = nil
     }
 
     func windowWillClose(_ notification: Notification) {
-        playerView.player = nil
+        window?.contentView = nil
         window?.delegate = nil
         window = nil
         Self.current = nil
@@ -261,16 +391,12 @@ private final class FullscreenPlayerWindow: NSObject, NSWindowDelegate {
 private final class FullscreenWebPlayerWindow: NSObject, NSWindowDelegate {
     private static var current: FullscreenWebPlayerWindow?
 
-    private let webView: WKWebView
+    private let hostingView: NSHostingView<FullscreenWebPlayerContent>
     private var window: NSWindow?
 
-    private init(url: URL, title: String) {
-        webView = WKWebView(frame: .zero, configuration: MacWebVideoPlayer.makeConfiguration())
+    private init(navigationState: PlaybackNavigationState) {
+        hostingView = NSHostingView(rootView: FullscreenWebPlayerContent(navigationState: navigationState))
         super.init()
-
-        webView.allowsBackForwardNavigationGestures = false
-        webView.setValue(false, forKey: "drawsBackground")
-        webView.load(MacWebVideoPlayer.request(for: url))
 
         let screenFrame = NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1280, height: 720)
         let window = NSWindow(
@@ -279,18 +405,18 @@ private final class FullscreenWebPlayerWindow: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = title
-        window.contentView = webView
+        window.title = navigationState.currentEpisode?.title ?? "播放窗口"
+        window.contentView = hostingView
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.setFrame(screenFrame, display: true)
         self.window = window
     }
 
-    static func show(url: URL, title: String) {
+    static func show(navigationState: PlaybackNavigationState) {
         current?.close()
 
-        let controller = FullscreenWebPlayerWindow(url: url, title: title)
+        let controller = FullscreenWebPlayerWindow(navigationState: navigationState)
         current = controller
         controller.show()
     }
@@ -302,15 +428,13 @@ private final class FullscreenWebPlayerWindow: NSObject, NSWindowDelegate {
 
     private func close() {
         window?.delegate = nil
-        webView.stopLoading()
-        webView.loadHTMLString("", baseURL: nil)
+        window?.contentView = nil
         window?.close()
         window = nil
     }
 
     func windowWillClose(_ notification: Notification) {
-        webView.stopLoading()
-        webView.loadHTMLString("", baseURL: nil)
+        window?.contentView = nil
         window?.delegate = nil
         window = nil
         Self.current = nil

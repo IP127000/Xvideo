@@ -26,6 +26,17 @@ struct MovieDetailView: View {
         playbackSources.first { $0.id == selectedPlaybackSourceID } ?? playbackSources.first
     }
 
+    private var previousEpisode: Episode? {
+        guard let selectedEpisode,
+              let episodes = selectedSource?.episodes,
+              let currentIndex = episodes.firstIndex(where: { $0.id == selectedEpisode.id }),
+              currentIndex > episodes.startIndex else {
+            return nil
+        }
+
+        return episodes[episodes.index(before: currentIndex)]
+    }
+
     private var nextEpisode: Episode? {
         guard let selectedEpisode,
               let episodes = selectedSource?.episodes,
@@ -44,7 +55,9 @@ struct MovieDetailView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         PlayerPanel(
                             episode: selectedEpisode,
+                            previousEpisode: previousEpisode,
                             nextEpisode: nextEpisode,
+                            playPreviousEpisode: playPreviousEpisode,
                             playNextEpisode: playNextEpisode
                         )
                         .frame(minHeight: 380, idealHeight: 430)
@@ -87,6 +100,16 @@ struct MovieDetailView: View {
                 }
 
                 Spacer()
+
+                if let previousEpisode {
+                    Button {
+                        playPreviousEpisode()
+                    } label: {
+                        Label("上一集", systemImage: "backward.end.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("播放上一集：\(previousEpisode.title)")
+                }
 
                 if let nextEpisode {
                     Button {
@@ -140,6 +163,11 @@ struct MovieDetailView: View {
             )
             .allowsHitTesting(false)
         }
+    }
+
+    private func playPreviousEpisode() {
+        guard let previousEpisode else { return }
+        selectedEpisode = previousEpisode
     }
 
     private func playNextEpisode() {
