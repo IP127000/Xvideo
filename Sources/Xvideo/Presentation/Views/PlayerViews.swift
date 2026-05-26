@@ -14,6 +14,7 @@ struct PlayerPanel: View {
     @StateObject private var queuePlayer = QueuePlaybackController()
     @State private var currentURL: URL?
     @StateObject private var navigationState = PlaybackNavigationState()
+    private let skipInterval: TimeInterval = 15
 
     var body: some View {
         ZStack {
@@ -25,7 +26,11 @@ struct PlayerPanel: View {
                     if usesWebPlayer(episode.url) {
                         MacWebVideoPlayer(url: episode.url)
                     } else {
-                        MacVideoPlayer(player: queuePlayer.player)
+                        MacVideoPlayer(
+                            player: queuePlayer.player,
+                            skipBackward: skipBackwardFromPlayer,
+                            skipForward: skipForwardFromPlayer
+                        )
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -137,6 +142,8 @@ struct PlayerPanel: View {
         navigationState.nextEpisode = nextEpisode
         navigationState.playPreviousEpisode = playPreviousEpisode
         navigationState.playNextEpisode = playNextEpisode
+        navigationState.skipBackward = skipBackwardFromPlayer
+        navigationState.skipForward = skipForwardFromPlayer
     }
 
     private func configureQueuePlayer() {
@@ -161,6 +168,19 @@ struct PlayerPanel: View {
         }
 
         queuePlayer.load(episode: episode, playlistEpisodes: playlistEpisodes)
+    }
+
+    private func skipBackwardFromPlayer() {
+        skipPlayback(by: -skipInterval)
+    }
+
+    private func skipForwardFromPlayer() {
+        skipPlayback(by: skipInterval)
+    }
+
+    private func skipPlayback(by seconds: TimeInterval) {
+        guard let episode, !usesWebPlayer(episode.url) else { return }
+        queuePlayer.seek(by: seconds)
     }
 
     private func usesWebPlayer(_ url: URL) -> Bool {
@@ -240,6 +260,23 @@ private final class QueuePlaybackController: ObservableObject {
         player.removeAllItems()
     }
 
+    func seek(by seconds: TimeInterval) {
+        let currentTime = player.currentTime()
+        let currentSeconds = currentTime.seconds
+        guard currentSeconds.isFinite else { return }
+
+        var targetSeconds = max(currentSeconds + seconds, 0)
+        if let durationSeconds = player.currentItem?.duration.seconds,
+           durationSeconds.isFinite,
+           durationSeconds > 0 {
+            targetSeconds = min(targetSeconds, durationSeconds)
+        }
+
+        let timescale = currentTime.timescale == 0 ? 600 : currentTime.timescale
+        let targetTime = CMTime(seconds: targetSeconds, preferredTimescale: timescale)
+        player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
     private func playableQueue(from episode: Episode, in playlistEpisodes: [Episode]) -> [Episode] {
         let nonWebEpisodes = playlistEpisodes.filter { !usesWebPlayerURL($0.url) }
         guard let selectedIndex = nonWebEpisodes.firstIndex(where: { $0.id == episode.id }) else {
@@ -310,23 +347,168 @@ private final class QueuePlaybackController: ObservableObject {
 
 private struct MacVideoPlayer: NSViewRepresentable {
     let player: AVPlayer
+    let skipBackward: () -> Void
+    let skipForward: () -> Void
 
-    func makeNSView(context: Context) -> AVPlayerView {
-        let view = AVPlayerView()
+    func makeCoordinator() -> NativeTransportSeekActions {
+        NativeTransportSeekActions()
+    }
+
+    func makeNSView(context: Context) -> SeekAwarePlayerView {
+        let view = SeekAwarePlayerView()
         view.player = player
         view.controlsStyle = .floating
         view.videoGravity = .resizeAspect
+        view.nativeSeekActions = context.coordinator
+        context.coordinator.configure(
+            skipBackward: skipBackward,
+            skipForward: skipForward
+        )
         return view
     }
 
-    func updateNSView(_ nsView: AVPlayerView, context: Context) {
+    func updateNSView(_ nsView: SeekAwarePlayerView, context: Context) {
         if nsView.player !== player {
             nsView.player = player
         }
+        nsView.nativeSeekActions = context.coordinator
+        context.coordinator.configure(
+            skipBackward: skipBackward,
+            skipForward: skipForward
+        )
     }
 
-    static func dismantleNSView(_ nsView: AVPlayerView, coordinator: ()) {
+    static func dismantleNSView(_ nsView: SeekAwarePlayerView, coordinator: NativeTransportSeekActions) {
         nsView.player = nil
+        nsView.nativeSeekActions = nil
+    }
+}
+
+@MainActor
+private final class NativeTransportSeekActions: NSObject {
+    private var skipBackward: () -> Void = {}
+    private var skipForward: () -> Void = {}
+
+    func configure(
+        skipBackward: @escaping () -> Void,
+        skipForward: @escaping () -> Void
+    ) {
+        self.skipBackward = skipBackward
+        self.skipForward = skipForward
+    }
+
+    func performBackwardSeek() {
+        skipBackward()
+    }
+
+    func performForwardSeek() {
+        skipForward()
+    }
+}
+
+private final class SeekAwarePlayerView: AVPlayerView {
+    weak var nativeSeekActions: NativeTransportSeekActions?
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if nativeTransportControl(at: point) != nil {
+            return self
+        }
+
+        return super.hitTest(point)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+
+        switch nativeTransportControl(at: point) {
+        case .rewind:
+            nativeSeekActions?.performBackwardSeek()
+        case .fastForward:
+            nativeSeekActions?.performForwardSeek()
+        case nil:
+            super.mouseDown(with: event)
+        }
+    }
+
+    override func layout() {
+        super.layout()
+        enableNativeTransportControls(in: self)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.enableNativeTransportControls(in: self)
+        }
+    }
+
+    private enum NativeTransportControl {
+        case rewind
+        case fastForward
+    }
+
+    private func nativeTransportControl(at point: NSPoint) -> NativeTransportControl? {
+        if transportView(at: point, matching: { label in
+            label.contains("rewind")
+        }) != nil {
+            return .rewind
+        }
+
+        if transportView(at: point, matching: { label in
+            label.contains("fast forward")
+        }) != nil {
+            return .fastForward
+        }
+
+        return nil
+    }
+
+    private func transportView(
+        at point: NSPoint,
+        in root: NSView? = nil,
+        matching predicate: (String) -> Bool
+    ) -> NSView? {
+        let root = root ?? self
+
+        for subview in root.subviews.reversed() {
+            let pointInSubview = subview.convert(point, from: self)
+            guard subview.bounds.contains(pointInSubview) else { continue }
+
+            let label = controlLabel(for: subview)
+            if predicate(label) {
+                return subview
+            }
+
+            if let match = transportView(at: point, in: subview, matching: predicate) {
+                return match
+            }
+        }
+
+        return nil
+    }
+
+    private func enableNativeTransportControls(in root: NSView) {
+        for subview in root.subviews {
+            let label = controlLabel(for: subview)
+            if label.contains("rewind") || label.contains("fast forward") {
+                (subview as? NSControl)?.isEnabled = true
+            }
+            enableNativeTransportControls(in: subview)
+        }
+    }
+
+    private func controlLabel(for view: NSView) -> String {
+        let controlTitle = (view as? NSButton)?.title
+        return [
+            view.accessibilityLabel(),
+            view.accessibilityHelp(),
+            view.toolTip,
+            controlTitle
+        ]
+        .compactMap { $0 }
+        .joined(separator: " ")
+        .lowercased()
     }
 }
 
@@ -380,6 +562,8 @@ private final class PlaybackNavigationState: ObservableObject {
 
     var playPreviousEpisode: () -> Void = {}
     var playNextEpisode: () -> Void = {}
+    var skipBackward: () -> Void = {}
+    var skipForward: () -> Void = {}
 }
 
 private struct FullscreenVideoPlayerContent: View {
@@ -391,7 +575,11 @@ private struct FullscreenVideoPlayerContent: View {
             Color.black
                 .ignoresSafeArea()
 
-            MacVideoPlayer(player: player)
+            MacVideoPlayer(
+                player: player,
+                skipBackward: navigationState.skipBackward,
+                skipForward: navigationState.skipForward
+            )
                 .ignoresSafeArea()
 
             FullscreenPlaybackBar(navigationState: navigationState)
