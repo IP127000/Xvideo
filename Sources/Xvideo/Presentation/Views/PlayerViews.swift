@@ -98,6 +98,7 @@ struct PlayerPanel: View {
                 .opacity(previousEpisode == nil ? 0.45 : 1)
                 .accessibilityLabel("播放上一集")
                 .help(previousEpisode.map { "播放上一集：\($0.title)" } ?? "没有上一集")
+                .instantTooltip(previousEpisode.map { "上一集：\($0.title)" } ?? "没有上一集")
 
                 Button {
                     playNextEpisode()
@@ -111,6 +112,7 @@ struct PlayerPanel: View {
                 .opacity(nextEpisode == nil ? 0.45 : 1)
                 .accessibilityLabel("播放下一集")
                 .help(nextEpisode.map { "播放下一集：\($0.title)" } ?? "没有下一集")
+                .instantTooltip(nextEpisode.map { "下一集：\($0.title)" } ?? "没有下一集")
 
                 Button {
                     syncNavigationState()
@@ -127,6 +129,7 @@ struct PlayerPanel: View {
                 }
                 .accessibilityLabel("打开播放窗口")
                 .help("打开播放窗口")
+                .instantTooltip("打开播放窗口")
             }
             .buttonStyle(.plain)
             .foregroundStyle(.white)
@@ -185,6 +188,44 @@ struct PlayerPanel: View {
 
     private func usesWebPlayer(_ url: URL) -> Bool {
         usesWebPlayerURL(url)
+    }
+}
+
+private struct InstantTooltipModifier: ViewModifier {
+    let text: String
+    @State private var isHovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { hovering in
+                isHovering = hovering
+            }
+            .overlay(alignment: .bottom) {
+                if isHovering {
+                    Text(text)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(.black.opacity(0.86), in: RoundedRectangle(cornerRadius: 6))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(.white.opacity(0.14), lineWidth: 1)
+                        }
+                        .offset(y: 28)
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                }
+            }
+            .animation(.easeOut(duration: 0.08), value: isHovering)
+    }
+}
+
+private extension View {
+    func instantTooltip(_ text: String) -> some View {
+        modifier(InstantTooltipModifier(text: text))
     }
 }
 
@@ -410,6 +451,17 @@ private final class SeekAwarePlayerView: AVPlayerView {
     weak var nativeSeekActions: NativeTransportSeekActions?
 
     private var transportTrackingArea: NSTrackingArea?
+    private let instantTooltipLabel = InstantTooltipTextField(labelWithString: "")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        configureInstantTooltipLabel()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        configureInstantTooltipLabel()
+    }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         if nativeTransportControl(at: point) != nil {
@@ -433,7 +485,18 @@ private final class SeekAwarePlayerView: AVPlayerView {
     }
 
     override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
         configureNativeTransportControls(in: self)
+
+        switch nativeTransportControl(at: point) {
+        case .rewind:
+            showInstantTooltip("后退15秒", near: point)
+        case .fastForward:
+            showInstantTooltip("前进15秒", near: point)
+        case nil:
+            hideInstantTooltip()
+        }
+
         super.mouseMoved(with: event)
     }
 
@@ -451,7 +514,7 @@ private final class SeekAwarePlayerView: AVPlayerView {
 
         let trackingArea = NSTrackingArea(
             rect: .zero,
-            options: [.activeInKeyWindow, .inVisibleRect, .mouseMoved],
+            options: [.activeInKeyWindow, .inVisibleRect, .mouseMoved, .mouseEnteredAndExited],
             owner: self,
             userInfo: nil
         )
@@ -459,10 +522,16 @@ private final class SeekAwarePlayerView: AVPlayerView {
         transportTrackingArea = trackingArea
     }
 
+    override func mouseExited(with event: NSEvent) {
+        hideInstantTooltip()
+        super.mouseExited(with: event)
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            self.ensureInstantTooltipLabel()
             self.configureNativeTransportControls(in: self)
         }
     }
@@ -513,7 +582,11 @@ private final class SeekAwarePlayerView: AVPlayerView {
     }
 
     private func configureNativeTransportControls(in root: NSView) {
+        ensureInstantTooltipLabel()
+
         for subview in root.subviews {
+            guard subview !== instantTooltipLabel else { continue }
+
             let label = controlLabel(for: subview)
             if label.contains("rewind") {
                 subview.toolTip = "后退15秒"
@@ -528,6 +601,48 @@ private final class SeekAwarePlayerView: AVPlayerView {
         }
     }
 
+    private func configureInstantTooltipLabel() {
+        instantTooltipLabel.isHidden = true
+        instantTooltipLabel.isEditable = false
+        instantTooltipLabel.isSelectable = false
+        instantTooltipLabel.isBordered = false
+        instantTooltipLabel.drawsBackground = false
+        instantTooltipLabel.alignment = .center
+        instantTooltipLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        instantTooltipLabel.textColor = .white
+        instantTooltipLabel.wantsLayer = true
+        instantTooltipLabel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.86).cgColor
+        instantTooltipLabel.layer?.cornerRadius = 6
+        instantTooltipLabel.layer?.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor
+        instantTooltipLabel.layer?.borderWidth = 1
+        instantTooltipLabel.setContentHuggingPriority(.required, for: .horizontal)
+        instantTooltipLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        ensureInstantTooltipLabel()
+    }
+
+    private func ensureInstantTooltipLabel() {
+        guard instantTooltipLabel.superview !== self else { return }
+        addSubview(instantTooltipLabel, positioned: .above, relativeTo: nil)
+    }
+
+    private func showInstantTooltip(_ text: String, near point: NSPoint) {
+        ensureInstantTooltipLabel()
+        instantTooltipLabel.stringValue = text
+
+        let fittingSize = instantTooltipLabel.intrinsicContentSize
+        let width = fittingSize.width + 16
+        let height = fittingSize.height + 10
+        let x = min(max(point.x - (width / 2), 8), max(bounds.width - width - 8, 8))
+        let y = min(max(point.y + 18, 8), max(bounds.height - height - 8, 8))
+
+        instantTooltipLabel.frame = NSRect(x: x, y: y, width: width, height: height)
+        instantTooltipLabel.isHidden = false
+    }
+
+    private func hideInstantTooltip() {
+        instantTooltipLabel.isHidden = true
+    }
+
     private func controlLabel(for view: NSView) -> String {
         let controlTitle = (view as? NSButton)?.title
         return [
@@ -539,6 +654,12 @@ private final class SeekAwarePlayerView: AVPlayerView {
         .compactMap { $0 }
         .joined(separator: " ")
         .lowercased()
+    }
+}
+
+private final class InstantTooltipTextField: NSTextField {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
     }
 }
 
@@ -666,6 +787,7 @@ private struct FullscreenPlaybackBar: View {
                 .opacity(navigationState.previousEpisode == nil ? 0.45 : 1)
                 .accessibilityLabel("播放上一集")
                 .help(navigationState.previousEpisode.map { "播放上一集：\($0.title)" } ?? "没有上一集")
+                .instantTooltip(navigationState.previousEpisode.map { "上一集：\($0.title)" } ?? "没有上一集")
 
                 Button {
                     navigationState.playNextEpisode()
@@ -679,6 +801,7 @@ private struct FullscreenPlaybackBar: View {
                 .opacity(navigationState.nextEpisode == nil ? 0.45 : 1)
                 .accessibilityLabel("播放下一集")
                 .help(navigationState.nextEpisode.map { "播放下一集：\($0.title)" } ?? "没有下一集")
+                .instantTooltip(navigationState.nextEpisode.map { "下一集：\($0.title)" } ?? "没有下一集")
             }
             .buttonStyle(.plain)
             .foregroundStyle(.white)

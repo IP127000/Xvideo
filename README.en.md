@@ -18,7 +18,8 @@ The main window keeps category browsing, filter search, details, and playback in
 - Search by title, actor, or keyword
 - View poster, summary, region, year, cast, director, and update status
 - Switch between multiple playback sources, including m3u8 and web-player sources
-- Jump to the next episode from the player
+- Jump to the previous or next episode from the player
+- Rewind or fast-forward 15 seconds, and close the playback window with Esc
 - Favorite videos and reopen them quickly from My Favorites
 - Download available mp4 resources to `~/Downloads/Xvideo`
 
