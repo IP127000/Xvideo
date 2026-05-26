@@ -409,6 +409,8 @@ private final class NativeTransportSeekActions: NSObject {
 private final class SeekAwarePlayerView: AVPlayerView {
     weak var nativeSeekActions: NativeTransportSeekActions?
 
+    private var transportTrackingArea: NSTrackingArea?
+
     override func hitTest(_ point: NSPoint) -> NSView? {
         if nativeTransportControl(at: point) != nil {
             return self
@@ -430,16 +432,38 @@ private final class SeekAwarePlayerView: AVPlayerView {
         }
     }
 
+    override func mouseMoved(with event: NSEvent) {
+        configureNativeTransportControls(in: self)
+        super.mouseMoved(with: event)
+    }
+
     override func layout() {
         super.layout()
-        enableNativeTransportControls(in: self)
+        configureNativeTransportControls(in: self)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+
+        if let transportTrackingArea {
+            removeTrackingArea(transportTrackingArea)
+        }
+
+        let trackingArea = NSTrackingArea(
+            rect: .zero,
+            options: [.activeInKeyWindow, .inVisibleRect, .mouseMoved],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        transportTrackingArea = trackingArea
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.enableNativeTransportControls(in: self)
+            self.configureNativeTransportControls(in: self)
         }
     }
 
@@ -488,13 +512,19 @@ private final class SeekAwarePlayerView: AVPlayerView {
         return nil
     }
 
-    private func enableNativeTransportControls(in root: NSView) {
+    private func configureNativeTransportControls(in root: NSView) {
         for subview in root.subviews {
             let label = controlLabel(for: subview)
-            if label.contains("rewind") || label.contains("fast forward") {
+            if label.contains("rewind") {
+                subview.toolTip = "后退15秒"
+                subview.setAccessibilityHelp("后退15秒")
+                (subview as? NSControl)?.isEnabled = true
+            } else if label.contains("fast forward") {
+                subview.toolTip = "前进15秒"
+                subview.setAccessibilityHelp("前进15秒")
                 (subview as? NSControl)?.isEnabled = true
             }
-            enableNativeTransportControls(in: subview)
+            configureNativeTransportControls(in: subview)
         }
     }
 
@@ -658,6 +688,27 @@ private struct FullscreenPlaybackBar: View {
     }
 }
 
+private final class PlaybackWindow: NSWindow {
+    var escapeHandler: (() -> Void)?
+
+    override func cancelOperation(_ sender: Any?) {
+        if let escapeHandler {
+            escapeHandler()
+        } else {
+            super.cancelOperation(sender)
+        }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 {
+            escapeHandler?()
+            return
+        }
+
+        super.keyDown(with: event)
+    }
+}
+
 @MainActor
 private final class FullscreenPlayerWindow: NSObject, NSWindowDelegate {
     private static var current: FullscreenPlayerWindow?
@@ -673,7 +724,7 @@ private final class FullscreenPlayerWindow: NSObject, NSWindowDelegate {
         super.init()
 
         let screenFrame = NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1280, height: 720)
-        let window = NSWindow(
+        let window = PlaybackWindow(
             contentRect: screenFrame,
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
@@ -685,6 +736,9 @@ private final class FullscreenPlayerWindow: NSObject, NSWindowDelegate {
         window.delegate = self
         window.setFrame(screenFrame, display: true)
         self.window = window
+        window.escapeHandler = { [weak self] in
+            self?.close()
+        }
     }
 
     static func show(player: AVPlayer, navigationState: PlaybackNavigationState) {
@@ -727,7 +781,7 @@ private final class FullscreenWebPlayerWindow: NSObject, NSWindowDelegate {
         super.init()
 
         let screenFrame = NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1280, height: 720)
-        let window = NSWindow(
+        let window = PlaybackWindow(
             contentRect: screenFrame,
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
@@ -739,6 +793,9 @@ private final class FullscreenWebPlayerWindow: NSObject, NSWindowDelegate {
         window.delegate = self
         window.setFrame(screenFrame, display: true)
         self.window = window
+        window.escapeHandler = { [weak self] in
+            self?.close()
+        }
     }
 
     static func show(navigationState: PlaybackNavigationState) {
