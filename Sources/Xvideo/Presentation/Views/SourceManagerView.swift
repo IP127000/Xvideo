@@ -43,7 +43,7 @@ struct SourceManagerView: View {
                 Text("视频源")
                     .font(.system(size: 28, weight: .black, design: .rounded))
                     .foregroundStyle(CinemaTheme.textPrimary)
-                Text("添加、测试并切换你自己的资源站接口")
+                Text("添加、测试并切换你自己的视频采集接口")
                     .font(.callout)
                     .foregroundStyle(CinemaTheme.textSecondary)
             }
@@ -71,8 +71,12 @@ struct SourceManagerView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(library.videoSources) { source in
-                        sourceRow(source)
+                    if library.videoSources.isEmpty {
+                        emptySourceState
+                    } else {
+                        ForEach(library.videoSources) { source in
+                            sourceRow(source)
+                        }
                     }
                 }
             }
@@ -81,6 +85,28 @@ struct SourceManagerView: View {
         .padding(14)
         .frame(width: 390)
         .background(CinemaTheme.panelBackground, in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(CinemaTheme.separator, lineWidth: 1)
+        }
+    }
+
+    private var emptySourceState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: "plus.rectangle.on.folder")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(CinemaTheme.accentHot)
+            Text("还没有保存的视频源")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(CinemaTheme.textPrimary)
+            Text("Xvideo 不内置任何数据源，请添加你自己的采集接口。")
+                .font(.caption)
+                .foregroundStyle(CinemaTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(CinemaTheme.elevatedBackground, in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(CinemaTheme.separator, lineWidth: 1)

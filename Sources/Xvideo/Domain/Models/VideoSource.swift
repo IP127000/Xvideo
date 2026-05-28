@@ -66,26 +66,3 @@ enum VideoSourceValidationError: LocalizedError {
         }
     }
 }
-
-extension VideoSource {
-    static let defaultSource = VideoSource(
-        id: UUID(uuidString: "5E142A4B-3F31-4CC7-A2D7-10C3FBEEB620")!,
-        name: "Xvideo",
-        homepageURL: URL(string: "https://lzizy.net"),
-        apiURL: URL(string: "https://lzizy.net/api.php/provide/vod/")!,
-        searchURL: URL(string: "https://macapi1.com/maccms/json/liangzi/"),
-        format: .json,
-        isBuiltIn: true
-    )
-
-    static let dyttSource = VideoSource(
-        id: UUID(uuidString: "D8229C14-AE30-4CE9-B50E-87E9EC2D0A6A")!,
-        name: "电影天堂资源",
-        homepageURL: URL(string: "https://dyttzy.tv/"),
-        apiURL: URL(string: "http://caiji.dyttzyapi.com/api.php/provide/vod/at/xml/")!,
-        format: .xml,
-        isBuiltIn: true
-    )
-
-    static let builtInSources = [defaultSource, dyttSource]
-}

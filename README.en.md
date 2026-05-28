@@ -2,7 +2,7 @@
 
 [中文](README.md) | [English](README.en.md)
 
-Xvideo is a native macOS video client built with SwiftUI. It fetches video lists, details, and playback sources from a media API, then presents them in a desktop-style browsing and playback experience.
+Xvideo is a native macOS video client built with SwiftUI. It fetches video lists, details, and playback sources from user-configured media APIs, then presents them in a desktop-style browsing and playback experience.
 
 The project is focused on everyday watching: browsing categories, searching titles, reading details, switching episodes, saving favorites, and playing videos inside the app.
 
@@ -19,6 +19,7 @@ The main window now uses a two-column cinematic layout: media library, categorie
 - Prioritize favorites in Featured Picks and shuffle to another batch
 - Search by title, actor, or keyword
 - View poster, summary, region, year, cast, director, and update status
+- Ships with no built-in data source; add your own collection API before browsing
 - Switch between multiple data and playback sources, including JSON, XML, and flat XML category APIs
 - Jump to the previous or next episode from the player
 - Rewind or fast-forward 15 seconds, and close the playback window with Esc
@@ -62,4 +63,4 @@ More architecture notes are available in [Docs/Architecture.md](Docs/Architectur
 
 ## Notes
 
-The app depends on a third-party media source API. Playback availability can vary depending on the resource, network environment, and source restrictions. The app validates a data source before enabling it, and keeps the current source active if validation fails. If one playback source does not play, try switching to another playback source first.
+The app ships with no built-in data source, and all catalog data comes from user-configured APIs. Playback availability can vary depending on the resource, network environment, and source restrictions. The app validates a data source before enabling it, and keeps the current source active if validation fails. If one playback source does not play, try switching to another playback source first.

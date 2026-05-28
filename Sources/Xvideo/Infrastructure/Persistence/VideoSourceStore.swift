@@ -2,17 +2,18 @@ import Foundation
 
 struct VideoSourceSnapshot {
     let sources: [VideoSource]
-    let activeSourceID: VideoSource.ID
+    let activeSourceID: VideoSource.ID?
 
-    var activeSource: VideoSource {
-        sources.first { $0.id == activeSourceID } ?? VideoSource.defaultSource
+    var activeSource: VideoSource? {
+        guard let activeSourceID else { return nil }
+        return sources.first { $0.id == activeSourceID }
     }
 }
 
 struct VideoSourceStore {
     private struct SourceFile: Codable {
         let sources: [VideoSource]
-        let activeSourceID: VideoSource.ID
+        let activeSourceID: VideoSource.ID?
     }
 
     private let fileURL: URL
@@ -36,46 +37,33 @@ struct VideoSourceStore {
     func load() -> VideoSourceSnapshot {
         guard let data = try? Data(contentsOf: fileURL),
               let sourceFile = try? decoder.decode(SourceFile.self, from: data) else {
-            return VideoSourceSnapshot(
-                sources: VideoSource.builtInSources,
-                activeSourceID: VideoSource.defaultSource.id
-            )
+            return VideoSourceSnapshot(sources: [], activeSourceID: nil)
         }
 
-        let sources = mergedWithBuiltIns(sourceFile.sources)
-        let activeSourceID = sources.contains { $0.id == sourceFile.activeSourceID }
-            ? sourceFile.activeSourceID
-            : VideoSource.defaultSource.id
+        let sources = storedUserSources(sourceFile.sources)
+        let activeSourceID = sourceFile.activeSourceID.flatMap { activeID in
+            sources.contains { $0.id == activeID } ? activeID : nil
+        } ?? sources.first?.id
 
         return VideoSourceSnapshot(sources: sources, activeSourceID: activeSourceID)
     }
 
-    func save(sources: [VideoSource], activeSourceID: VideoSource.ID) {
+    func save(sources: [VideoSource], activeSourceID: VideoSource.ID?) {
         let sourceFile = SourceFile(
-            sources: mergedWithBuiltIns(sources),
-            activeSourceID: activeSourceID
+            sources: storedUserSources(sources),
+            activeSourceID: activeSourceID.flatMap { activeID in
+                sources.contains { $0.id == activeID } ? activeID : nil
+            }
         )
 
         guard let data = try? encoder.encode(sourceFile) else { return }
         try? data.write(to: fileURL, options: [.atomic])
     }
 
-    private func mergedWithBuiltIns(_ sources: [VideoSource]) -> [VideoSource] {
-        var result = sources
-
-        for builtIn in VideoSource.builtInSources {
-            if let index = result.firstIndex(where: { $0.id == builtIn.id }) {
-                result[index] = builtIn
-            } else {
-                result.append(builtIn)
+    private func storedUserSources(_ sources: [VideoSource]) -> [VideoSource] {
+        sources.filter { !$0.isBuiltIn }
+            .sorted { lhs, rhs in
+                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
             }
-        }
-
-        return result.sorted { lhs, rhs in
-            if lhs.isBuiltIn != rhs.isBuiltIn {
-                return lhs.isBuiltIn && !rhs.isBuiltIn
-            }
-            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-        }
     }
 }

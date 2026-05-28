@@ -48,7 +48,6 @@ actor LibraryPageCacheStore {
     }
 
     private let directoryURL: URL
-    private let legacyFileURL: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
@@ -57,7 +56,6 @@ actor LibraryPageCacheStore {
             ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
         let directoryURL = baseURL.appendingPathComponent("Xvideo", isDirectory: true)
         self.directoryURL = directoryURL
-        legacyFileURL = directoryURL.appendingPathComponent("library-cache.json")
 
         encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -107,6 +105,6 @@ actor LibraryPageCacheStore {
     }
 
     private func legacyFallbackURL(for sourceID: VideoSource.ID) -> URL {
-        sourceID == VideoSource.defaultSource.id ? legacyFileURL : cacheFileURL(for: sourceID)
+        cacheFileURL(for: sourceID)
     }
 }

@@ -257,6 +257,7 @@ private extension VodAPIClient {
 enum APIError: LocalizedError {
     case badResponse
     case emptyDetail
+    case missingSource
 
     var errorDescription: String? {
         switch self {
@@ -264,6 +265,8 @@ enum APIError: LocalizedError {
             return "网站接口返回异常。"
         case .emptyDetail:
             return "没有找到影片详情。"
+        case .missingSource:
+            return "请先添加并启用视频源。"
         }
     }
 }

@@ -19,7 +19,7 @@ final class LibraryViewModel: ObservableObject {
     @Published var filterYear = ""
     @Published var filterArea = ""
     @Published private(set) var videoSources: [VideoSource]
-    @Published private(set) var activeVideoSourceID: VideoSource.ID
+    @Published private(set) var activeVideoSourceID: VideoSource.ID?
     @Published var isSwitchingVideoSource = false
     @Published private var posterFileURLs: [URL: URL] = [:]
 
@@ -143,8 +143,13 @@ final class LibraryViewModel: ObservableObject {
         ["", "中国大陆", "香港", "台湾", "日本", "韩国", "美国", "英国", "泰国", "其他"]
     }
 
-    var activeVideoSource: VideoSource {
-        videoSources.first { $0.id == activeVideoSourceID } ?? VideoSource.defaultSource
+    var activeVideoSource: VideoSource? {
+        guard let activeVideoSourceID else { return nil }
+        return videoSources.first { $0.id == activeVideoSourceID }
+    }
+
+    var hasActiveVideoSource: Bool {
+        activeVideoSource != nil
     }
 
     func cachedPosterFileURL(for url: URL?) -> URL? {
@@ -180,8 +185,10 @@ final class LibraryViewModel: ObservableObject {
 
         let result = try await repository.testSource(source)
         videoSources.append(source)
+        activeVideoSourceID = source.id
+        repository.updateSource(source)
         persistVideoSources()
-        await selectVideoSource(source)
+        await reloadForActiveSource()
         return result
     }
 
@@ -215,10 +222,13 @@ final class LibraryViewModel: ObservableObject {
         videoSources.removeAll { $0.id == source.id && !$0.isBuiltIn }
 
         if wasActive {
-            activeVideoSourceID = VideoSource.defaultSource.id
-            repository.updateSource(activeVideoSource)
             persistVideoSources()
-            await reloadForActiveSource()
+            repository.updateSource(activeVideoSource)
+            if activeVideoSource == nil {
+                resetLibraryStateForSourceChange()
+            } else {
+                await reloadForActiveSource()
+            }
         } else {
             persistVideoSources()
         }
@@ -243,6 +253,11 @@ final class LibraryViewModel: ObservableObject {
         guard force || movies.isEmpty else { return }
 
         await restoreLocalCache()
+        guard hasActiveVideoSource else {
+            resetLibraryStateForSourceChange()
+            return
+        }
+
         await loadCategoriesIfNeeded(force: true)
 
         if let cachedPage = previewPage(for: selectedCategory) {
@@ -259,6 +274,11 @@ final class LibraryViewModel: ObservableObject {
     }
 
     func refresh() async {
+        guard hasActiveVideoSource else {
+            errorMessage = APIError.missingSource.localizedDescription
+            return
+        }
+
         if contentMode == .search || !normalizedSearchText.isEmpty {
             await search()
             return
@@ -293,6 +313,11 @@ final class LibraryViewModel: ObservableObject {
         contentMode = .preview
         errorMessage = nil
         listRequestID = UUID()
+
+        guard hasActiveVideoSource else {
+            clearVisibleList()
+            return
+        }
 
         if let cachedPage = previewPage(for: category) {
             await applyLibraryPage(cachedPage.page, reset: true)
@@ -434,6 +459,12 @@ final class LibraryViewModel: ObservableObject {
     }
 
     private func loadOnlineList(reset: Bool) async {
+        guard hasActiveVideoSource else {
+            clearVisibleList()
+            errorMessage = APIError.missingSource.localizedDescription
+            return
+        }
+
         let targetPage = reset ? 1 : page + 1
         let categorySnapshot = contentMode == .onlineCategory ? filterCategory : selectedCategory
         let keywordSnapshot = normalizedSearchText
@@ -602,6 +633,7 @@ final class LibraryViewModel: ObservableObject {
         let snapshot = sourceStore.load()
         videoSources = snapshot.sources
         activeVideoSourceID = snapshot.activeSourceID
+        repository.updateSource(snapshot.activeSource)
     }
 
     private var normalizedSearchText: String {
@@ -627,6 +659,13 @@ final class LibraryViewModel: ObservableObject {
     }
 
     private func restoreLocalCache() async {
+        guard let activeVideoSourceID else {
+            categories = []
+            previewCache = [:]
+            posterFileURLs = [:]
+            return
+        }
+
         let snapshot = await libraryCacheStore.load(sourceID: activeVideoSourceID)
         if !snapshot.categories.isEmpty {
             categories = snapshot.categories
@@ -654,6 +693,7 @@ final class LibraryViewModel: ObservableObject {
     }
 
     private func loadCategoriesIfNeeded(force: Bool = false) async {
+        guard hasActiveVideoSource else { return }
         guard force || categories.isEmpty else { return }
 
         do {
@@ -681,6 +721,7 @@ final class LibraryViewModel: ObservableObject {
     }
 
     private func rebuildPreviewCache(applyVisiblePage: Bool) async {
+        guard hasActiveVideoSource else { return }
         guard !isRebuildingPreviewCache else { return }
 
         isRebuildingPreviewCache = true
@@ -774,6 +815,8 @@ final class LibraryViewModel: ObservableObject {
     }
 
     private func fetchAndStorePreview(category: VodCategory?, applyIfVisible: Bool) async {
+        guard hasActiveVideoSource else { return }
+
         do {
             let page = try await loadLibraryPage.fetchPreview(
                 selectedCategory: category,
@@ -926,9 +969,10 @@ final class LibraryViewModel: ObservableObject {
     }
 
     private func persistPreviewCache() {
+        guard let sourceID = activeVideoSourceID else { return }
+
         let categoriesSnapshot = categories
         let pagesSnapshot = previewCache
-        let sourceID = activeVideoSourceID
         Task {
             await libraryCacheStore.save(
                 sourceID: sourceID,

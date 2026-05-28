@@ -139,11 +139,11 @@ struct CinematicSidebarView: View {
                 .frame(width: 34, height: 34)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(library.activeVideoSource.name)
+                    Text(library.activeVideoSource?.name ?? "未配置视频源")
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(CinemaTheme.textPrimary)
                         .lineLimit(1)
-                    Text("\(library.activeVideoSource.format.title) 数据源")
+                    Text(sourceFooterSubtitle)
                         .font(.caption2)
                         .foregroundStyle(CinemaTheme.textSecondary)
                         .lineLimit(1)
@@ -173,6 +173,13 @@ struct CinematicSidebarView: View {
         }
         .padding(14)
         .background(.black.opacity(0.16))
+    }
+
+    private var sourceFooterSubtitle: String {
+        guard let source = library.activeVideoSource else {
+            return "添加自己的接口"
+        }
+        return "\(source.format.title) 数据源"
     }
 
     private var sourceSettingsBackground: some ShapeStyle {
