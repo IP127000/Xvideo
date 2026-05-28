@@ -191,6 +191,17 @@ final class LibraryViewModel: ObservableObject {
             return
         }
 
+        isSwitchingVideoSource = true
+        errorMessage = nil
+
+        do {
+            _ = try await repository.testSource(storedSource)
+        } catch {
+            isSwitchingVideoSource = false
+            errorMessage = "无法启用该视频源：\(error.localizedDescription)"
+            return
+        }
+
         activeVideoSourceID = storedSource.id
         repository.updateSource(storedSource)
         persistVideoSources()
@@ -232,7 +243,7 @@ final class LibraryViewModel: ObservableObject {
         guard force || movies.isEmpty else { return }
 
         await restoreLocalCache()
-        await loadCategoriesIfNeeded()
+        await loadCategoriesIfNeeded(force: true)
 
         if let cachedPage = previewPage(for: selectedCategory) {
             await applyLibraryPage(cachedPage.page, reset: true)
@@ -368,6 +379,23 @@ final class LibraryViewModel: ObservableObject {
         await loadOnlineList(reset: false)
     }
 
+    func loadBrowsableGridPageIfNeeded(current item: VodItem) async {
+        guard item.id == movies.last?.id,
+              page < pageCount,
+              !isLoadingList else {
+            return
+        }
+
+        if contentMode == .preview {
+            contentMode = .onlineCategory
+            filterCategory = selectedCategory
+            filterYear = ""
+            filterArea = ""
+        }
+
+        await loadOnlineList(reset: false)
+    }
+
     func selectMovie(_ item: VodItem) async {
         let cachedListItem = movieFromCache(matching: item) ?? item
         selectedMovie = cachedListItem
@@ -399,7 +427,6 @@ final class LibraryViewModel: ObservableObject {
                 isLoadingDetail = false
                 return
             }
-            errorMessage = error.localizedDescription
             detailMovie = item
         }
 
@@ -441,6 +468,11 @@ final class LibraryViewModel: ObservableObject {
         } catch {
             guard listRequestID == requestID else { return }
             guard !isCancellation(error) else {
+                isLoadingList = false
+                return
+            }
+            if !reset, !movies.isEmpty {
+                pageCount = page
                 isLoadingList = false
                 return
             }
@@ -610,7 +642,7 @@ final class LibraryViewModel: ObservableObject {
                 page: 1,
                 pageCount: page.pageCount,
                 total: page.total,
-                remoteCategories: page.remoteCategories
+                remoteCategories: nil
             )
             result[key] = CachedLibraryPage(
                 page: previewPage,
@@ -621,8 +653,8 @@ final class LibraryViewModel: ObservableObject {
         posterFileURLs = await posterCacheStore.cachedFileURLs(for: cachedPosterURLs)
     }
 
-    private func loadCategoriesIfNeeded() async {
-        guard categories.isEmpty else { return }
+    private func loadCategoriesIfNeeded(force: Bool = false) async {
+        guard force || categories.isEmpty else { return }
 
         do {
             let loadedCategories = try await loadLibraryPage.fetchCategories()
@@ -631,7 +663,9 @@ final class LibraryViewModel: ObservableObject {
             }
         } catch {
             guard !isCancellation(error) else { return }
-            errorMessage = error.localizedDescription
+            if categories.isEmpty {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 

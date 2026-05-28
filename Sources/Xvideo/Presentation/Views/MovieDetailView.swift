@@ -7,6 +7,7 @@ struct MovieDetailView: View {
 
     @Binding var selectedPlaybackSourceID: PlaybackSource.ID?
     @Binding var selectedEpisode: Episode?
+    let dismissToBrowser: () -> Void
 
     private var movie: VodItem? {
         library.detailMovie ?? library.selectedMovie
@@ -53,6 +54,12 @@ struct MovieDetailView: View {
             if let movie {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
+                        PlayerPageHeader(
+                            movie: movie,
+                            selectedEpisode: selectedEpisode,
+                            dismissToBrowser: dismissToBrowser
+                        )
+
                         PlayerPanel(
                             episode: selectedEpisode,
                             playlistEpisodes: selectedSource?.episodes ?? [],
@@ -62,7 +69,7 @@ struct MovieDetailView: View {
                             playNextEpisode: playNextEpisode,
                             didAdvanceToEpisode: { selectedEpisode = $0 }
                         )
-                        .frame(minHeight: 380, idealHeight: 430)
+                        .frame(minHeight: 420, idealHeight: 500)
 
                         DetailHeroSection(
                             movie: movie,
@@ -183,6 +190,51 @@ struct MovieDetailView: View {
             .first { $0.id == id }?
             .episodes
             .first
+    }
+}
+
+private struct PlayerPageHeader: View {
+    let movie: VodItem
+    let selectedEpisode: Episode?
+    let dismissToBrowser: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Button(action: dismissToBrowser) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .bold))
+                    .frame(width: 38, height: 34)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(CinemaTheme.textPrimary)
+            .background(CinemaTheme.elevatedBackground, in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(CinemaTheme.separator, lineWidth: 1)
+            }
+            .help("返回浏览")
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(movie.vodName)
+                    .font(.system(size: 30, weight: .black, design: .rounded))
+                    .foregroundStyle(CinemaTheme.textPrimary)
+                    .lineLimit(1)
+                    .textSelection(.enabled)
+
+                Text(selectedEpisode.map { "正在播放：\($0.title)" } ?? "选择一集开始播放")
+                    .font(.callout)
+                    .foregroundStyle(CinemaTheme.textSecondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            HStack(spacing: 8) {
+                Badge(text: movie.vodRemarks ?? "待播放", color: CinemaTheme.accentHot)
+                Badge(text: "评分 \(movie.scoreText)", color: CinemaTheme.gold)
+            }
+        }
     }
 }
 

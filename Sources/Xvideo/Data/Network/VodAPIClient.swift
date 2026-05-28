@@ -77,16 +77,37 @@ struct VodAPIClient: Sendable {
     }
 
     func fetchCategories(source: VideoSource) async throws -> [VodCategory] {
-        let items = [
-            URLQueryItem(name: "ac", value: "detail"),
-            URLQueryItem(name: "pg", value: "1")
+        let categoryProbes = [
+            [
+                URLQueryItem(name: "ac", value: "detail"),
+                URLQueryItem(name: "pg", value: "1")
+            ],
+            [],
+            [
+                URLQueryItem(name: "ac", value: "list")
+            ],
+            [
+                URLQueryItem(name: "ac", value: "videolist"),
+                URLQueryItem(name: "pg", value: "1")
+            ]
         ]
-        do {
-            let response: VodListResponse = try await request(source: source, url: makeURL(source.apiURL, queryItems: items))
-            return response.class?.isEmpty == false ? response.class ?? [] : Self.fallbackCategories
-        } catch {
-            return Self.fallbackCategories
+
+        for items in categoryProbes {
+            do {
+                let response: VodListResponse = try await request(
+                    source: source,
+                    url: makeURL(source.apiURL, queryItems: items)
+                )
+
+                if let categories = response.class, !categories.isEmpty {
+                    return categories
+                }
+            } catch {
+                continue
+            }
         }
+
+        return Self.fallbackCategories
     }
 
     func fetchDetail(source: VideoSource, id: Int) async throws -> VodItem {
@@ -104,18 +125,47 @@ struct VodAPIClient: Sendable {
     }
 
     func test(source: VideoSource) async throws -> SourceTestResult {
-        let items = [
-            URLQueryItem(name: "ac", value: "videolist"),
-            URLQueryItem(name: "pg", value: "1")
+        let probes = [
+            [
+                URLQueryItem(name: "ac", value: "detail"),
+                URLQueryItem(name: "pg", value: "1")
+            ],
+            [
+                URLQueryItem(name: "ac", value: "videolist"),
+                URLQueryItem(name: "pg", value: "1")
+            ],
+            [],
+            [
+                URLQueryItem(name: "ac", value: "list")
+            ]
         ]
-        let response: VodListResponse = try await request(source: source, url: makeURL(source.apiURL, queryItems: items))
-        let categoryCount = response.class?.count ?? 0
+        var listOnlyResult: SourceTestResult?
 
-        guard categoryCount > 0 || !response.list.isEmpty else {
-            throw APIError.badResponse
+        for items in probes {
+            do {
+                let response: VodListResponse = try await request(
+                    source: source,
+                    url: makeURL(source.apiURL, queryItems: items)
+                )
+                let categoryCount = response.class?.count ?? 0
+
+                if categoryCount > 0 {
+                    return SourceTestResult(categoryCount: categoryCount, itemCount: response.list.count)
+                }
+
+                if !response.list.isEmpty, listOnlyResult == nil {
+                    listOnlyResult = SourceTestResult(categoryCount: 0, itemCount: response.list.count)
+                }
+            } catch {
+                continue
+            }
         }
 
-        return SourceTestResult(categoryCount: categoryCount, itemCount: response.list.count)
+        if let listOnlyResult {
+            return listOnlyResult
+        }
+
+        throw APIError.badResponse
     }
 
     private func request(source: VideoSource, url: URL) async throws -> VodListResponse {

@@ -19,13 +19,29 @@ final class VodXMLParser: NSObject, XMLParserDelegate {
         var playURLs: [String] = []
     }
 
+    private struct XMLCategory {
+        let id: Int
+        let parentID: Int?
+        let name: String
+    }
+
+    private struct RootCategoryIDs {
+        let movie: Int?
+        let drama: Int?
+        let variety: Int?
+        let anime: Int?
+        let sports: Int?
+        let shortDrama: Int?
+    }
+
     private var page: Int?
     private var pageCount: Int?
     private var total: Int?
     private var videos: [VodItem] = []
-    private var categories: [VodCategory] = []
+    private var categories: [XMLCategory] = []
     private var currentVideo: XMLVideo?
     private var currentCategoryID: Int?
+    private var currentCategoryParentID: Int?
     private var currentPlayFlag: String?
     private var currentElement = ""
     private var textBuffer = ""
@@ -39,13 +55,15 @@ final class VodXMLParser: NSObject, XMLParserDelegate {
             throw parser.parserError ?? APIError.badResponse
         }
 
+        let categories = Self.vodCategories(from: delegate.categories)
+
         return VodListResponse(
             code: 1,
             page: delegate.page,
             pagecount: delegate.pageCount,
             total: delegate.total,
             list: delegate.videos,
-            class: delegate.categories.isEmpty ? nil : delegate.categories
+            class: categories.isEmpty ? nil : categories
         )
     }
 
@@ -68,6 +86,10 @@ final class VodXMLParser: NSObject, XMLParserDelegate {
             currentVideo = XMLVideo()
         case "ty":
             currentCategoryID = attributeDict.flexibleInt(named: "id")
+                ?? attributeDict.flexibleInt(named: "type_id")
+            currentCategoryParentID = attributeDict.flexibleInt(named: "pid")
+                ?? attributeDict.flexibleInt(named: "parentid")
+                ?? attributeDict.flexibleInt(named: "type_pid")
         case "dd":
             currentPlayFlag = attributeDict["flag"]
         default:
@@ -97,13 +119,14 @@ final class VodXMLParser: NSObject, XMLParserDelegate {
             applyVideoField(elementName: elementName, text: text)
         } else if elementName == "ty", let currentCategoryID {
             categories.append(
-                VodCategory(
-                    typeId: currentCategoryID,
-                    typePid: Self.parentID(for: currentCategoryID, name: text),
-                    typeName: text.isEmpty ? "未分类" : text
+                XMLCategory(
+                    id: currentCategoryID,
+                    parentID: currentCategoryParentID,
+                    name: text.isEmpty ? "未分类" : text
                 )
             )
             self.currentCategoryID = nil
+            currentCategoryParentID = nil
         }
 
         if elementName == "video", let currentVideo {
@@ -188,30 +211,179 @@ final class VodXMLParser: NSObject, XMLParserDelegate {
         )
     }
 
-    private static func parentID(for id: Int, name: String) -> Int {
-        if let fallbackParentID = fallbackParentIDs[id] {
-            return fallbackParentID
+    private static func vodCategories(from xmlCategories: [XMLCategory]) -> [VodCategory] {
+        let rootIDs = rootCategoryIDs(in: xmlCategories)
+        var seen = Set<Int>()
+        return xmlCategories.compactMap { category in
+            guard category.id > 0, seen.insert(category.id).inserted else { return nil }
+
+            return VodCategory(
+                typeId: category.id,
+                typePid: parentID(
+                    for: category.id,
+                    explicitParentID: category.parentID,
+                    name: category.name,
+                    rootIDs: rootIDs
+                ),
+                typeName: category.name
+            )
+        }
+    }
+
+    private static func rootCategoryIDs(in categories: [XMLCategory]) -> RootCategoryIDs {
+        let ids = Set(categories.map(\.id))
+
+        return RootCategoryIDs(
+            movie: rootID(in: categories, matching: isMovieRootName) ?? (ids.contains(1) ? 1 : nil),
+            drama: rootID(in: categories, matching: isDramaRootName) ?? (ids.contains(2) ? 2 : nil),
+            variety: rootID(in: categories, matching: isVarietyRootName) ?? (ids.contains(3) ? 3 : nil),
+            anime: rootID(in: categories, matching: isAnimeRootName) ?? (ids.contains(4) ? 4 : nil),
+            sports: rootID(in: categories, matching: isSportsRootName) ?? (ids.contains(36) ? 36 : nil),
+            shortDrama: rootID(in: categories, matching: isShortDramaRootName)
+        )
+    }
+
+    private static func rootID(
+        in categories: [XMLCategory],
+        matching predicate: (String) -> Bool
+    ) -> Int? {
+        categories.first { predicate(normalizedCategoryName($0.name)) }?.id
+    }
+
+    private static func parentID(
+        for id: Int,
+        explicitParentID: Int?,
+        name: String,
+        rootIDs: RootCategoryIDs
+    ) -> Int {
+        let normalizedName = normalizedCategoryName(name)
+
+        if let explicitParentID, explicitParentID != id {
+            return max(explicitParentID, 0)
         }
 
-        if ["电影片", "连续剧", "综艺片", "动漫片", "体育"].contains(name) {
+        if isMovieRootName(normalizedName) ||
+            isDramaRootName(normalizedName) ||
+            isVarietyRootName(normalizedName) ||
+            isAnimeRootName(normalizedName) ||
+            isSportsRootName(normalizedName) ||
+            isShortDramaRootName(normalizedName) {
             return 0
         }
-        if name.contains("剧") {
-            return 2
+
+        if isShortDramaChildName(normalizedName) {
+            return rootIDs.shortDrama ?? 0
         }
-        if name.contains("综艺") {
-            return 3
+        if isSportsChildName(normalizedName) {
+            return rootIDs.sports ?? 0
         }
-        if name.contains("动漫") {
-            return 4
+        if isVarietyChildName(normalizedName) {
+            return rootIDs.variety ?? 0
         }
-        if name.contains("足球") || name.contains("篮球") || name.contains("网球") || name.contains("斯诺克") {
-            return 36
+        if isAnimeChildName(normalizedName) {
+            return rootIDs.anime ?? 0
         }
-        if name.contains("片") || name.contains("电影") {
-            return 1
+        if isDramaChildName(normalizedName) {
+            return rootIDs.drama ?? 0
         }
+        if isMovieChildName(normalizedName) {
+            return rootIDs.movie ?? 0
+        }
+
+        if let fallbackParentID = fallbackParentIDs[id] {
+            return mappedParentID(fallbackParentID, rootIDs: rootIDs)
+        }
+
         return 0
+    }
+
+    private static func mappedParentID(_ parentID: Int, rootIDs: RootCategoryIDs) -> Int {
+        switch parentID {
+        case 1:
+            return rootIDs.movie ?? 0
+        case 2:
+            return rootIDs.drama ?? 0
+        case 3:
+            return rootIDs.variety ?? 0
+        case 4:
+            return rootIDs.anime ?? 0
+        case 36:
+            return rootIDs.sports ?? 0
+        default:
+            return parentID
+        }
+    }
+
+    private static func normalizedCategoryName(_ name: String) -> String {
+        name.replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "　", with: "")
+            .lowercased()
+    }
+
+    private static func isMovieRootName(_ name: String) -> Bool {
+        ["电影", "电影片"].contains(name)
+    }
+
+    private static func isDramaRootName(_ name: String) -> Bool {
+        ["电视剧", "连续剧", "剧集"].contains(name)
+    }
+
+    private static func isVarietyRootName(_ name: String) -> Bool {
+        ["综艺", "综艺片"].contains(name)
+    }
+
+    private static func isAnimeRootName(_ name: String) -> Bool {
+        ["动漫", "动漫片"].contains(name)
+    }
+
+    private static func isSportsRootName(_ name: String) -> Bool {
+        name == "体育" || name == "体育赛事"
+    }
+
+    private static func isShortDramaRootName(_ name: String) -> Bool {
+        ["短剧", "短剧片", "爽文短剧"].contains(name)
+    }
+
+    private static func isMovieChildName(_ name: String) -> Bool {
+        name == "动画片" ||
+            name.contains("电影") ||
+            name.contains("片") ||
+            name.contains("纪录") ||
+            name.contains("记录") ||
+            name.contains("伦理") ||
+            name.contains("解说") ||
+            name.contains("三级") ||
+            name.contains("4k")
+    }
+
+    private static func isDramaChildName(_ name: String) -> Bool {
+        name.contains("剧")
+    }
+
+    private static func isVarietyChildName(_ name: String) -> Bool {
+        name.contains("综艺") || name.contains("演唱会")
+    }
+
+    private static func isAnimeChildName(_ name: String) -> Bool {
+        name.contains("动漫")
+    }
+
+    private static func isSportsChildName(_ name: String) -> Bool {
+        name.contains("足球") ||
+            name.contains("篮球") ||
+            name.contains("网球") ||
+            name.contains("斯诺克") ||
+            name.contains("体育")
+    }
+
+    private static func isShortDramaChildName(_ name: String) -> Bool {
+        name.contains("短剧") ||
+            name.contains("爽剧") ||
+            name.contains("恋爱") ||
+            name.contains("仙侠") ||
+            name.contains("穿越") ||
+            name.contains("悬疑") ||
+            name.contains("都市")
     }
 
     private static let fallbackParentIDs: [Int: Int] = [

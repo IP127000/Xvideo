@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var selectedSection: LibrarySection = .home
     @State private var selectedPlaybackSourceID: PlaybackSource.ID?
     @State private var selectedEpisode: Episode?
+    @State private var route: ContentRoute = .browse
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -20,17 +21,26 @@ struct ContentView: View {
                 )
                 .frame(minWidth: 230, idealWidth: 252, maxWidth: 300)
 
-                MediaBrowserView(
-                    searchDraft: $searchDraft,
-                    selectedSection: $selectedSection
-                )
-                .frame(minWidth: 390, idealWidth: 460, maxWidth: 560)
+                ZStack {
+                    MediaBrowserView(
+                        searchDraft: $searchDraft,
+                        selectedSection: $selectedSection,
+                        openMovie: openMovie,
+                        playMovie: { route = .watch }
+                    )
+                    .opacity(route == .browse ? 1 : 0)
+                    .allowsHitTesting(route == .browse)
 
-                MovieDetailView(
-                    selectedPlaybackSourceID: $selectedPlaybackSourceID,
-                    selectedEpisode: $selectedEpisode
-                )
-                .frame(minWidth: 620)
+                    if route == .watch {
+                        MovieDetailView(
+                            selectedPlaybackSourceID: $selectedPlaybackSourceID,
+                            selectedEpisode: $selectedEpisode,
+                            dismissToBrowser: { route = .browse }
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    }
+                }
+                .frame(minWidth: 780)
             }
         }
         .preferredColorScheme(.dark)
@@ -47,6 +57,10 @@ struct ContentView: View {
         .onChange(of: library.searchText) { _, newValue in
             searchDraft = newValue
         }
+        .onChange(of: selectedSection) { _, _ in
+            route = .browse
+        }
+        .animation(.easeInOut(duration: 0.22), value: route)
     }
 
     private func selectPreferredPlayback(for movie: VodItem?) {
@@ -61,10 +75,22 @@ struct ContentView: View {
         selectedPlaybackSourceID = preferredSource?.id
         selectedEpisode = preferredSource?.episodes.first
     }
+
+    private func openMovie(_ movie: VodItem) {
+        Task {
+            await library.selectMovie(movie)
+            route = .browse
+        }
+    }
 }
 
 enum LibrarySection: Hashable {
     case home
     case favorites
     case category(Int)
+}
+
+private enum ContentRoute {
+    case browse
+    case watch
 }

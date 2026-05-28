@@ -3,14 +3,16 @@ import SwiftUI
 struct MediaBrowserView: View {
     @Binding var searchDraft: String
     @Binding var selectedSection: LibrarySection
+    let openMovie: (VodItem) -> Void
+    let playMovie: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        Group {
             switch selectedSection {
             case .favorites:
-                FavoritesBrowserView()
+                FavoritesBrowserView(openMovie: openMovie)
             case .home, .category:
-                MovieListBrowserView(searchDraft: $searchDraft)
+                MovieListBrowserView(searchDraft: $searchDraft, openMovie: openMovie, playMovie: playMovie)
             }
         }
         .background(CinemaTheme.appBackground)
@@ -19,9 +21,16 @@ struct MediaBrowserView: View {
 
 private struct MovieListBrowserView: View {
     @EnvironmentObject private var library: LibraryViewModel
+    @EnvironmentObject private var favorites: FavoritesStore
     @Binding var searchDraft: String
+    let openMovie: (VodItem) -> Void
+    let playMovie: () -> Void
 
     @State private var isHoveringHeaderMore = false
+    @State private var isFilterPanelManuallyOpened = false
+    @State private var isAllMoviesSectionActive = false
+    @State private var featuredBatchIndex = 0
+    private let featuredMovieLimit = 10
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,29 +45,58 @@ private struct MovieListBrowserView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 10) {
-                        ForEach(library.movies) { item in
-                            MovieListCard(
-                                item: item,
-                                isSelected: library.selectedMovie?.id == item.id
-                            ) {
-                                Task { await library.selectMovie(item) }
-                            }
-                            .task {
-                                await library.loadNextPageIfNeeded(current: item)
-                            }
+                    VStack(alignment: .leading, spacing: 28) {
+                        if let spotlightMovie {
+                            SpotlightHero(movie: spotlightMovie, playMovie: playMovie)
+                                .padding(.horizontal, 24)
+                                .padding(.top, 22)
                         }
+
+                        MovieRail(
+                            title: railTitle,
+                            subtitle: "\(railMovies.count) 部正在展示",
+                            movies: railMovies,
+                            selectedMovieID: library.selectedMovie?.id,
+                            canShuffle: featuredCandidates.count > featuredMovieLimit,
+                            shuffleMovies: showNextFeaturedBatch,
+                            openMovie: openMovie
+                        )
+
+                        MoviePosterGrid(
+                            movies: gridMovies,
+                            paginationAnchor: library.movies.last,
+                            isLoading: library.isLoadingList,
+                            selectedMovieID: library.selectedMovie?.id,
+                            openMovie: openMovie
+                        )
+                        .padding(.horizontal, 24)
 
                         if library.isLoadingList {
                             ProgressView()
                                 .controlSize(.small)
-                                .padding(.vertical, 18)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
                         }
                     }
-                    .padding(14)
+                    .padding(.bottom, 32)
+                }
+                .coordinateSpace(name: "movieBrowserScroll")
+                .onPreferenceChange(AllMoviesSectionYPreferenceKey.self) { sectionY in
+                    guard let sectionY else { return }
+                    isAllMoviesSectionActive = sectionY < 180
+                }
+                .onChange(of: library.movies.first?.id) { _, _ in
+                    featuredBatchIndex = 0
+                }
+                .onChange(of: library.movies.count) { _, _ in
+                    clampFeaturedBatchIndex()
+                }
+                .onChange(of: library.selectedCategory?.id) { _, _ in
+                    featuredBatchIndex = 0
                 }
             }
         }
+        .background(browserBackdrop)
         .alert("无法加载", isPresented: Binding(
             get: { library.errorMessage != nil },
             set: { if !$0 { library.errorMessage = nil } }
@@ -72,9 +110,9 @@ private struct MovieListBrowserView: View {
     private var browserHeader: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 5) {
                     Text(library.currentTitle)
-                        .font(.system(size: 30, weight: .black, design: .rounded))
+                        .font(.system(size: 34, weight: .black, design: .rounded))
                         .foregroundStyle(CinemaTheme.textPrimary)
                         .lineLimit(1)
 
@@ -92,8 +130,26 @@ private struct MovieListBrowserView: View {
                         .help("正在更新本地预览")
                 }
 
+                Button {
+                    Task { await library.refresh() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 34, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(CinemaTheme.textPrimary)
+                .background(CinemaTheme.elevatedBackground, in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(CinemaTheme.separator, lineWidth: 1)
+                }
+                .help("刷新")
+
                 if library.canRequestMoreForCurrentSelection {
                     Button {
+                        isFilterPanelManuallyOpened = true
                         Task { await library.openFilterSearch(for: library.selectedCategory) }
                     } label: {
                         MoreFilterLabel()
@@ -119,21 +175,94 @@ private struct MovieListBrowserView: View {
                 ChildCategoryStrip(searchDraft: $searchDraft)
             }
 
-            if library.isShowingFilterSearch {
+            if shouldShowFilterPanel {
                 FilterSearchPanel()
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 18)
-        .padding(.bottom, 14)
+        .padding(.horizontal, 24)
+        .padding(.top, 20)
+        .padding(.bottom, 16)
         .background {
             Rectangle()
-                .fill(CinemaTheme.panelBackground)
+                .fill(CinemaTheme.headerBackground)
                 .overlay(alignment: .bottom) {
                     Rectangle()
                         .fill(CinemaTheme.separator)
                         .frame(height: 1)
                 }
+        }
+    }
+
+    private var spotlightMovie: VodItem? {
+        library.selectedMovie ?? library.movies.first
+    }
+
+    private var railMovies: [VodItem] {
+        guard !featuredCandidates.isEmpty else { return [] }
+
+        let startIndex = min(featuredBatchIndex * featuredMovieLimit, max(featuredCandidates.count - 1, 0))
+        let endIndex = min(startIndex + featuredMovieLimit, featuredCandidates.count)
+        return Array(featuredCandidates[startIndex..<endIndex])
+    }
+
+    private var featuredCandidates: [VodItem] {
+        let favoriteIDs = Set(favorites.items.map(\.id))
+        return library.movies.enumerated().sorted { lhs, rhs in
+            let lhsFavorite = favoriteIDs.contains(lhs.element.id)
+            let rhsFavorite = favoriteIDs.contains(rhs.element.id)
+
+            if lhsFavorite != rhsFavorite {
+                return lhsFavorite && !rhsFavorite
+            }
+
+            return lhs.offset < rhs.offset
+        }
+        .map(\.element)
+    }
+
+    private var gridMovies: [VodItem] {
+        let featuredIDs = Set(railMovies.map(\.id))
+        return library.movies.filter { !featuredIDs.contains($0.id) }
+    }
+
+    private var shouldShowFilterPanel: Bool {
+        library.isShowingFilterSearch && (isFilterPanelManuallyOpened || isAllMoviesSectionActive)
+    }
+
+    private var railTitle: String {
+        "精选影片"
+    }
+
+    private func showNextFeaturedBatch() {
+        guard featuredCandidates.count > featuredMovieLimit else { return }
+        let batchCount = Int(ceil(Double(featuredCandidates.count) / Double(featuredMovieLimit)))
+        featuredBatchIndex = (featuredBatchIndex + 1) % batchCount
+    }
+
+    private func clampFeaturedBatchIndex() {
+        let batchCount = max(Int(ceil(Double(featuredCandidates.count) / Double(featuredMovieLimit))), 1)
+        if featuredBatchIndex >= batchCount {
+            featuredBatchIndex = 0
+        }
+    }
+
+    private var browserBackdrop: some View {
+        ZStack(alignment: .topTrailing) {
+            CinemaTheme.appBackground
+            RadialGradient(
+                colors: [CinemaTheme.accent.opacity(0.2), .clear],
+                center: .topTrailing,
+                startRadius: 40,
+                endRadius: 760
+            )
+            .allowsHitTesting(false)
+            RadialGradient(
+                colors: [CinemaTheme.teal.opacity(0.12), .clear],
+                center: .bottomLeading,
+                startRadius: 40,
+                endRadius: 620
+            )
+            .allowsHitTesting(false)
         }
     }
 
@@ -159,11 +288,11 @@ private struct MovieListBrowserView: View {
     }
 
     private var headerSubtitle: String {
-        if library.isShowingFilterSearch {
+        if shouldShowFilterPanel {
             return filterSummary
         }
         if library.isShowingPreview {
-            return "本地预览优先，点击 More 可筛选"
+            return "大屏浏览模式 · 点击影片在上方查看详情"
         }
         return "\(library.total) 条结果"
     }
@@ -202,7 +331,7 @@ private struct SearchField: View {
                 Button {
                     searchDraft = ""
                     library.searchText = ""
-                    Task { await library.refresh() }
+                    Task { await library.selectCategory(library.selectedCategory) }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                 }
@@ -218,6 +347,27 @@ private struct SearchField: View {
                 .stroke(isFocused ? CinemaTheme.accent.opacity(0.7) : CinemaTheme.separator, lineWidth: 1)
         }
         .animation(.easeOut(duration: 0.12), value: isFocused)
+    }
+}
+
+private struct LoadingStateView: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.large)
+                .tint(CinemaTheme.accentHot)
+
+            Text(title)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(CinemaTheme.textPrimary)
+
+            Text(subtitle)
+                .font(.callout)
+                .foregroundStyle(CinemaTheme.textSecondary)
+        }
     }
 }
 
@@ -417,208 +567,405 @@ private struct FilterSearchPanel: View {
     }
 }
 
-private struct MovieListCard: View {
+private struct SpotlightHero: View {
+    let movie: VodItem
+    let playMovie: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            heroPoster
+
+            LinearGradient(
+                colors: [.black.opacity(0.04), .black.opacity(0.38), .black.opacity(0.94)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            LinearGradient(
+                colors: [.black.opacity(0.82), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 8) {
+                    Badge(text: movie.vodRemarks ?? "最新推荐", color: CinemaTheme.accentHot)
+                    Badge(text: "评分 \(movie.scoreText)", color: CinemaTheme.gold)
+                    if let typeName = movie.typeName?.nilIfBlank {
+                        Badge(text: typeName, color: CinemaTheme.teal)
+                    }
+                }
+
+                Text(movie.vodName)
+                    .font(.system(size: 46, weight: .black, design: .rounded))
+                    .foregroundStyle(CinemaTheme.textPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                Text(metadataText)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(CinemaTheme.textSecondary)
+                    .lineLimit(1)
+
+                Text(movie.summary)
+                    .font(.body)
+                    .foregroundStyle(CinemaTheme.textSecondary)
+                    .lineLimit(3)
+                    .frame(maxWidth: 620, alignment: .leading)
+
+                Button(action: playMovie) {
+                    Label("开始播放", systemImage: "play.fill")
+                        .font(.headline.weight(.bold))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .background(CinemaTheme.redGradient, in: RoundedRectangle(cornerRadius: 8))
+                .help("进入播放页")
+            }
+            .padding(28)
+        }
+        .frame(maxWidth: .infinity, minHeight: 360, maxHeight: 420)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.white.opacity(0.13), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.36), radius: 26, x: 0, y: 18)
+    }
+
+    private var heroPoster: some View {
+        HStack {
+            Spacer()
+            PosterView(url: movie.posterURL, width: 270, height: 382)
+                .padding(.trailing, 52)
+                .rotation3DEffect(.degrees(-4), axis: (x: 0, y: 1, z: 0))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            LinearGradient(
+                colors: [
+                    CinemaTheme.elevatedBackground,
+                    CinemaTheme.accent.opacity(0.28),
+                    CinemaTheme.gold.opacity(0.12)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+
+    private var metadataText: String {
+        [
+            movie.vodYear,
+            movie.vodArea,
+            movie.vodLang,
+            movie.vodClass
+        ].compactMap { $0?.nilIfBlank }.joined(separator: " · ")
+    }
+}
+
+private struct MovieRail: View {
+    let title: String
+    let subtitle: String
+    let movies: [VodItem]
+    let selectedMovieID: VodItem.ID?
+    let canShuffle: Bool
+    let shuffleMovies: () -> Void
+    let openMovie: (VodItem) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.title2.weight(.black))
+                    .foregroundStyle(CinemaTheme.textPrimary)
+                Text(subtitle)
+                    .font(.callout)
+                    .foregroundStyle(CinemaTheme.textTertiary)
+                Spacer()
+
+                Button(action: shuffleMovies) {
+                    Label("换一批", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.caption.weight(.bold))
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(canShuffle ? CinemaTheme.textPrimary : CinemaTheme.textTertiary)
+                .background(CinemaTheme.elevatedBackground, in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(CinemaTheme.separator, lineWidth: 1)
+                }
+                .disabled(!canShuffle)
+                .help(canShuffle ? "换一批精选影片" : "暂无更多精选影片")
+            }
+            .padding(.horizontal, 24)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 14) {
+                    ForEach(movies) { movie in
+                        MoviePosterCard(
+                            movie: movie,
+                            isSelected: selectedMovieID == movie.id,
+                            width: 150,
+                            posterHeight: 214,
+                            openMovie: openMovie
+                        )
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 4)
+            }
+        }
+    }
+}
+
+private struct MoviePosterGrid: View {
+    @EnvironmentObject private var library: LibraryViewModel
+
+    let movies: [VodItem]
+    let paginationAnchor: VodItem?
+    let isLoading: Bool
+    let selectedMovieID: VodItem.ID?
+    let openMovie: (VodItem) -> Void
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 16)
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("全部影片")
+                .font(.title2.weight(.black))
+                .foregroundStyle(CinemaTheme.textPrimary)
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: AllMoviesSectionYPreferenceKey.self,
+                            value: proxy.frame(in: .named("movieBrowserScroll")).minY
+                        )
+                    }
+                }
+
+            if movies.isEmpty {
+                AllMoviesLoadingHint(isLoading: isLoading)
+                    .task(id: paginationAnchor?.id) {
+                        if let paginationAnchor {
+                            await library.loadBrowsableGridPageIfNeeded(current: paginationAnchor)
+                        }
+                    }
+            } else {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
+                    ForEach(movies) { movie in
+                        MoviePosterCard(
+                            movie: movie,
+                            isSelected: selectedMovieID == movie.id,
+                            width: nil,
+                            posterHeight: 228,
+                            openMovie: openMovie
+                        )
+                        .task {
+                            await library.loadBrowsableGridPageIfNeeded(current: movie)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct AllMoviesLoadingHint: View {
+    let isLoading: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: "arrow.down.circle")
+                    .font(.headline)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(isLoading ? "正在加载全部影片" : "加载全部影片")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(CinemaTheme.textPrimary)
+            }
+
+            Spacer()
+        }
+        .padding(14)
+        .background(CinemaTheme.elevatedBackground, in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(CinemaTheme.separator, lineWidth: 1)
+        }
+    }
+}
+
+private struct AllMoviesSectionYPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat? = nil
+
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        value = nextValue() ?? value
+    }
+}
+
+private struct MoviePosterCard: View {
     @EnvironmentObject private var favorites: FavoritesStore
 
-    let item: VodItem
+    let movie: VodItem
     let isSelected: Bool
-    let action: () -> Void
+    let width: CGFloat?
+    let posterHeight: CGFloat
+    let openMovie: (VodItem) -> Void
 
     @State private var isHovering = false
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                PosterView(url: item.posterURL, width: 70, height: 100)
+        Button {
+            openMovie(movie)
+        } label: {
+            VStack(alignment: .leading, spacing: 9) {
+                ZStack(alignment: .topTrailing) {
+                    PosterView(url: movie.posterURL, width: posterWidth, height: posterHeight)
+                        .frame(maxWidth: width ?? .infinity)
 
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(spacing: 6) {
-                        Text(item.vodName)
-                            .font(.headline.weight(.bold))
-                            .foregroundStyle(CinemaTheme.textPrimary)
-                            .lineLimit(1)
-
-                        if favorites.isFavorite(item) {
-                            Image(systemName: "heart.fill")
-                                .foregroundStyle(.pink)
-                                .font(.caption)
-                        }
+                    if favorites.isFavorite(movie) {
+                        Image(systemName: "heart.fill")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(7)
+                            .background(.pink, in: Circle())
+                            .padding(8)
                     }
 
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.78)],
+                        startPoint: .center,
+                        endPoint: .bottom
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .allowsHitTesting(false)
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(movie.vodName)
+                        .font(.callout.weight(.bold))
+                        .foregroundStyle(CinemaTheme.textPrimary)
+                        .lineLimit(1)
+
                     HStack(spacing: 6) {
-                        if let remarks = item.vodRemarks?.nilIfBlank {
-                            Badge(text: remarks, color: CinemaTheme.blue)
+                        if let remarks = movie.vodRemarks?.nilIfBlank {
+                            Text(remarks)
                         }
-                        if let typeName = item.typeName?.nilIfBlank {
-                            Text(typeName)
-                        }
-                        if let year = item.vodYear?.nilIfBlank {
+                        if let year = movie.vodYear?.nilIfBlank {
                             Text(year)
                         }
                     }
                     .font(.caption)
-                    .foregroundStyle(CinemaTheme.textSecondary)
+                    .foregroundStyle(CinemaTheme.textTertiary)
                     .lineLimit(1)
-
-                    Text(item.vodTime?.nilIfBlank ?? "等待加载")
-                        .font(.caption2)
-                        .foregroundStyle(CinemaTheme.textTertiary)
-                        .lineLimit(1)
                 }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(isSelected ? .white : CinemaTheme.textTertiary)
             }
-            .padding(10)
+            .frame(width: width)
+            .padding(8)
+            .background(cardBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isSelected ? CinemaTheme.accentHot.opacity(0.86) : Color.white.opacity(isHovering ? 0.18 : 0.07), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(isHovering ? 0.32 : 0.16), radius: isHovering ? 18 : 10, x: 0, y: isHovering ? 12 : 7)
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
-        .background(background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(isSelected ? CinemaTheme.accent.opacity(0.8) : CinemaTheme.separator, lineWidth: 1)
-        }
+        .scaleEffect(isHovering ? 1.025 : 1)
         .onHover { isHovering = $0 }
-        .animation(.easeOut(duration: 0.12), value: isHovering)
-        .animation(.easeOut(duration: 0.12), value: isSelected)
+        .animation(.easeOut(duration: 0.14), value: isHovering)
+        .animation(.easeOut(duration: 0.14), value: isSelected)
     }
 
-    private var background: some ShapeStyle {
+    private var cardBackground: some ShapeStyle {
         if isSelected {
             return AnyShapeStyle(
                 LinearGradient(
-                    colors: [CinemaTheme.accent.opacity(0.28), CinemaTheme.elevatedBackground],
-                    startPoint: .leading,
-                    endPoint: .trailing
+                    colors: [CinemaTheme.accent.opacity(0.24), CinemaTheme.elevatedBackground],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
             )
         }
         if isHovering {
             return AnyShapeStyle(CinemaTheme.elevatedBackground)
         }
-        return AnyShapeStyle(CinemaTheme.panelBackground)
+        return AnyShapeStyle(Color.black.opacity(0.18))
+    }
+
+    private var posterWidth: CGFloat {
+        width ?? 164
     }
 }
 
 private struct FavoritesBrowserView: View {
-    @EnvironmentObject private var library: LibraryViewModel
     @EnvironmentObject private var favorites: FavoritesStore
 
+    let openMovie: (VodItem) -> Void
+
     private let columns = [
-        GridItem(.adaptive(minimum: 142, maximum: 182), spacing: 14)
+        GridItem(.adaptive(minimum: 158, maximum: 198), spacing: 16)
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Label("我的收藏", systemImage: "heart.fill")
-                        .font(.system(size: 30, weight: .black, design: .rounded))
-                        .foregroundStyle(CinemaTheme.textPrimary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("我的收藏", systemImage: "heart.fill")
+                            .font(.system(size: 34, weight: .black, design: .rounded))
+                            .foregroundStyle(CinemaTheme.textPrimary)
+
+                        Text(favorites.items.isEmpty ? "收藏喜欢的影片后会出现在这里" : "\(favorites.items.count) 部常看内容")
+                            .font(.callout)
+                            .foregroundStyle(CinemaTheme.textSecondary)
+                    }
+
                     Spacer()
-                    Text("\(favorites.items.count) 部")
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(CinemaTheme.textSecondary)
                 }
 
-                Text("收藏会保留影片信息和海报，点击即可在右侧继续观看")
-                    .font(.callout)
-                    .foregroundStyle(CinemaTheme.textSecondary)
-            }
-            .padding(18)
-            .background(CinemaTheme.panelBackground)
-
-            if favorites.items.isEmpty {
-                ContentUnavailableView("暂无收藏", systemImage: "heart", description: Text("在详情页点击收藏后会显示在这里。"))
-                    .foregroundStyle(CinemaTheme.textSecondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
+                if favorites.items.isEmpty {
+                    ContentUnavailableView("暂无收藏", systemImage: "heart", description: Text("在播放页点击收藏即可加入这里。"))
+                        .foregroundStyle(CinemaTheme.textSecondary)
+                        .frame(maxWidth: .infinity, minHeight: 360)
+                } else {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
                         ForEach(favorites.items) { favorite in
-                            FavoritePosterCard(favorite: favorite) {
-                                Task { await library.selectMovie(favorite.item) }
-                            }
+                            MoviePosterCard(
+                                movie: favorite.item,
+                                isSelected: false,
+                                width: nil,
+                                posterHeight: 238,
+                                openMovie: openMovie
+                            )
                         }
                     }
-                    .padding(14)
                 }
             }
+            .padding(24)
         }
-        .task(id: favorites.items.map(\.id)) {
-            await library.cachePosters(for: favorites.items.map(\.item))
-        }
-    }
-}
-
-private struct FavoritePosterCard: View {
-    @EnvironmentObject private var favorites: FavoritesStore
-
-    let favorite: FavoriteMovie
-    let action: () -> Void
-
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                PosterView(url: favorite.item.posterURL, width: 142, height: 202)
-                    .frame(maxWidth: .infinity)
-
-                Text(favorite.item.vodName)
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(CinemaTheme.textPrimary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-
-                HStack(spacing: 6) {
-                    if let remarks = favorite.item.vodRemarks?.nilIfBlank {
-                        Text(remarks)
-                    }
-                    if let year = favorite.item.vodYear?.nilIfBlank {
-                        Text(year)
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(CinemaTheme.textSecondary)
-                .lineLimit(1)
+        .background {
+            ZStack(alignment: .topTrailing) {
+                CinemaTheme.appBackground
+                RadialGradient(
+                    colors: [.pink.opacity(0.16), .clear],
+                    center: .topTrailing,
+                    startRadius: 40,
+                    endRadius: 620
+                )
             }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .background(isHovering ? CinemaTheme.elevatedBackground : CinemaTheme.panelBackground, in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(CinemaTheme.separator, lineWidth: 1)
-        }
-        .contextMenu {
-            Button("取消收藏", role: .destructive) {
-                favorites.toggle(favorite.item)
-            }
-        }
-        .onHover { isHovering = $0 }
-    }
-}
-
-private struct LoadingStateView: View {
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-                .controlSize(.large)
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(CinemaTheme.textPrimary)
-            Text(subtitle)
-                .font(.callout)
-                .foregroundStyle(CinemaTheme.textSecondary)
         }
     }
 }
