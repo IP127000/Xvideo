@@ -274,9 +274,9 @@ private struct MovieListBrowserView: View {
         }
     }
 
-    private var hoverDetailWidth: CGFloat { 340 }
+    private var hoverDetailWidth: CGFloat { 430 }
 
-    private var hoverDetailHeight: CGFloat { 260 }
+    private var hoverDetailHeight: CGFloat { 340 }
 
     private func showHoverPreview(_ movie: VodItem, frame: CGRect) {
         hoveredPreview = HoveredMoviePreview(movie: movie, frame: frame)
@@ -955,8 +955,14 @@ private struct MoviePosterCard: View {
                         if let remarks = movie.vodRemarks?.nilIfBlank {
                             Text(remarks)
                         }
+                        if movie.episodeCount > 1 {
+                            Text("\(movie.episodeCount) 集")
+                        }
                         if let year = movie.vodYear?.nilIfBlank {
                             Text(year)
+                        }
+                        if let updateDate = movie.formattedUpdateDate {
+                            Text(updateDate)
                         }
                     }
                     .font(.caption)
@@ -1047,12 +1053,12 @@ private struct MovieHoverDetailCard: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(movie.vodName)
-                        .font(.headline.weight(.black))
+                        .font(.title3.weight(.black))
                         .foregroundStyle(CinemaTheme.textPrimary)
                         .lineLimit(2)
 
                     Text(metadataText)
-                        .font(.caption.weight(.semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundStyle(CinemaTheme.textSecondary)
                         .lineLimit(2)
                 }
@@ -1060,25 +1066,27 @@ private struct MovieHoverDetailCard: View {
                 Spacer(minLength: 8)
 
                 Label("双击播放", systemImage: "play.fill")
-                    .font(.caption2.weight(.bold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
                     .background(CinemaTheme.accent, in: Capsule())
             }
 
             Text(movie.summary)
-                .font(.caption)
+                .font(.callout)
                 .foregroundStyle(CinemaTheme.textSecondary)
-                .lineLimit(5)
+                .lineLimit(6)
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 6) {
+                detailLine(title: "更新", value: updateText)
+                detailLine(title: "剧集", value: episodeText)
                 detailLine(title: "主演", value: movie.vodActor)
                 detailLine(title: "导演", value: movie.vodDirector)
             }
         }
-        .padding(14)
+        .padding(18)
         .background(CinemaTheme.panelBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -1098,17 +1106,42 @@ private struct MovieHoverDetailCard: View {
             .nilIfBlank ?? "暂无元数据"
     }
 
+    private var updateText: String {
+        movie.formattedUpdateDate ?? movie.vodTime?.nilIfBlank ?? "暂无"
+    }
+
+    private var episodeText: String {
+        if movie.episodeCount > 1 {
+            return "\(movie.episodeCount) 集"
+        }
+        return movie.vodRemarks?.nilIfBlank ?? "暂无"
+    }
+
     private func detailLine(title: String, value: String?) -> some View {
         HStack(alignment: .top, spacing: 6) {
             Text(title)
-                .font(.caption2.weight(.bold))
+                .font(.caption.weight(.bold))
                 .foregroundStyle(CinemaTheme.textTertiary)
-                .frame(width: 30, alignment: .leading)
+                .frame(width: 38, alignment: .leading)
             Text(value?.nilIfBlank ?? "暂无")
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(CinemaTheme.textSecondary)
                 .lineLimit(2)
         }
+    }
+}
+
+private extension VodItem {
+    var episodeCount: Int {
+        SourceParser.parsePlaybackSources(from: self)
+            .map(\.episodes.count)
+            .max() ?? 0
+    }
+
+    var formattedUpdateDate: String? {
+        guard let raw = vodTime?.nilIfBlank else { return nil }
+        let datePart = raw.split(separator: " ").first.map(String.init) ?? raw
+        return datePart.replacingOccurrences(of: "/", with: "-")
     }
 }
 
