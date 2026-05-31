@@ -30,7 +30,9 @@ private struct MovieListBrowserView: View {
     @State private var isFilterPanelManuallyOpened = false
     @State private var isAllMoviesSectionActive = false
     @State private var featuredBatchIndex = 0
-    @State private var hoveredPreview: HoveredMoviePreview?
+    @State private var cardDetailPreview: MovieCardDetailPreview?
+    @State private var lastScrollContentY: CGFloat?
+    @State private var headerHeight: CGFloat = 146
     private let featuredMovieLimit = 10
 
     var body: some View {
@@ -63,8 +65,7 @@ private struct MovieListBrowserView: View {
                                     canShuffle: featuredCandidates.count > featuredMovieLimit,
                                     shuffleMovies: showNextFeaturedBatch,
                                     openMovie: openMovie,
-                                    previewMovie: showHoverPreview,
-                                    clearPreview: clearHoverPreview,
+                                    showDetailPreview: showCardDetailPreview,
                                     playMovie: playMovieFromCard
                                 )
 
@@ -74,8 +75,8 @@ private struct MovieListBrowserView: View {
                                     isLoading: library.isLoadingList,
                                     selectedMovieID: library.selectedMovie?.id,
                                     openMovie: openMovie,
-                                    previewMovie: showHoverPreview,
-                                    clearPreview: clearHoverPreview,
+                                    showDetailPreview: showCardDetailPreview,
+                                    clearDetailPreview: clearCardDetailPreview,
                                     playMovie: playMovieFromCard
                                 )
                                 .padding(.horizontal, 24)
@@ -88,17 +89,21 @@ private struct MovieListBrowserView: View {
                                 }
                             }
                             .padding(.bottom, 32)
+                            .background(alignment: .top) {
+                                scrollOffsetReader
+                            }
                         }
                         .coordinateSpace(name: "movieBrowserScroll")
                         .onPreferenceChange(AllMoviesSectionYPreferenceKey.self) { sectionY in
                             guard let sectionY else { return }
                             isAllMoviesSectionActive = sectionY < 180
                         }
+                        .onPreferenceChange(MovieBrowserScrollYPreferenceKey.self, perform: handleScrollContentYChange)
 
-                        if let hoveredPreview {
-                            MovieHoverDetailCard(movie: hoveredPreview.movie)
-                                .frame(width: hoverDetailWidth)
-                                .position(hoverDetailPosition(for: hoveredPreview.frame, in: containerProxy.size))
+                        if let cardDetailPreview {
+                            MovieCardDetailPopover(movie: cardDetailPreview.movie)
+                                .frame(width: cardDetailWidth)
+                                .position(cardDetailPosition(for: cardDetailPreview.frame, in: containerProxy.size))
                                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
                                 .zIndex(100)
                                 .allowsHitTesting(false)
@@ -107,16 +112,33 @@ private struct MovieListBrowserView: View {
                 }
                 .onChange(of: library.movies.first?.id) { _, _ in
                     featuredBatchIndex = 0
+                    cardDetailPreview = nil
                 }
                 .onChange(of: library.movies.count) { _, _ in
                     clampFeaturedBatchIndex()
                 }
                 .onChange(of: library.selectedCategory?.id) { _, _ in
                     featuredBatchIndex = 0
+                    cardDetailPreview = nil
                 }
             }
         }
+        .overlay(alignment: .topLeading) {
+            if shouldShowFilterPanel {
+                FilterSearchPanel()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.top, headerHeight + 10)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .zIndex(200)
+            }
+        }
         .background(browserBackdrop)
+        .onPreferenceChange(BrowserHeaderHeightPreferenceKey.self) { height in
+            if height > 40 {
+                headerHeight = height
+            }
+        }
         .alert("无法加载", isPresented: Binding(
             get: { library.errorMessage != nil },
             set: { if !$0 { library.errorMessage = nil } }
@@ -195,9 +217,6 @@ private struct MovieListBrowserView: View {
                 ChildCategoryStrip(searchDraft: $searchDraft)
             }
 
-            if shouldShowFilterPanel {
-                FilterSearchPanel()
-            }
         }
         .padding(.horizontal, 24)
         .padding(.top, 20)
@@ -210,6 +229,15 @@ private struct MovieListBrowserView: View {
                         .fill(CinemaTheme.separator)
                         .frame(height: 1)
                 }
+        }
+        .overlay {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: BrowserHeaderHeightPreferenceKey.self,
+                    value: proxy.size.height
+                )
+                .allowsHitTesting(false)
+            }
         }
     }
 
@@ -266,6 +294,25 @@ private struct MovieListBrowserView: View {
         }
     }
 
+    private var scrollOffsetReader: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: MovieBrowserScrollYPreferenceKey.self,
+                value: proxy.frame(in: .named("movieBrowserScroll")).minY
+            )
+        }
+    }
+
+    private func handleScrollContentYChange(_ contentY: CGFloat?) {
+        guard let contentY else { return }
+        defer { lastScrollContentY = contentY }
+        guard let lastScrollContentY else { return }
+
+        if abs(contentY - lastScrollContentY) > 1 {
+            cardDetailPreview = nil
+        }
+    }
+
     private func playMovieFromCard(_ movie: VodItem) {
         openMovie(movie)
         Task { @MainActor in
@@ -274,33 +321,31 @@ private struct MovieListBrowserView: View {
         }
     }
 
-    private var hoverDetailWidth: CGFloat { 430 }
+    private var cardDetailWidth: CGFloat { 430 }
 
-    private var hoverDetailHeight: CGFloat { 340 }
+    private var cardDetailHeight: CGFloat { 340 }
 
-    private func showHoverPreview(_ movie: VodItem, frame: CGRect) {
-        hoveredPreview = HoveredMoviePreview(movie: movie, frame: frame)
+    private func showCardDetailPreview(_ movie: VodItem, frame: CGRect) {
+        cardDetailPreview = MovieCardDetailPreview(movie: movie, frame: frame)
     }
 
-    private func clearHoverPreview(_ movie: VodItem) {
-        if hoveredPreview?.movie.id == movie.id {
-            hoveredPreview = nil
-        }
+    private func clearCardDetailPreview() {
+        cardDetailPreview = nil
     }
 
-    private func hoverDetailPosition(for frame: CGRect, in size: CGSize) -> CGPoint {
+    private func cardDetailPosition(for frame: CGRect, in size: CGSize) -> CGPoint {
         let margin: CGFloat = 14
-        let canOpenRight = frame.maxX + margin + hoverDetailWidth <= size.width
+        let canOpenRight = frame.maxX + margin + cardDetailWidth <= size.width
         let x: CGFloat
         if canOpenRight {
-            x = frame.maxX + margin + hoverDetailWidth / 2
+            x = frame.maxX + margin + cardDetailWidth / 2
         } else {
-            x = max(hoverDetailWidth / 2 + margin, frame.minX - margin - hoverDetailWidth / 2)
+            x = max(cardDetailWidth / 2 + margin, frame.minX - margin - cardDetailWidth / 2)
         }
 
-        let minY = hoverDetailHeight / 2 + margin
-        let maxY = max(minY, size.height - hoverDetailHeight / 2 - margin)
-        let y = min(max(frame.minY + hoverDetailHeight / 2, minY), maxY)
+        let minY = cardDetailHeight / 2 + margin
+        let maxY = max(minY, size.height - cardDetailHeight / 2 - margin)
+        let y = min(max(frame.minY + cardDetailHeight / 2, minY), maxY)
         return CGPoint(x: x, y: y)
     }
 
@@ -732,8 +777,7 @@ private struct MovieRail: View {
     let canShuffle: Bool
     let shuffleMovies: () -> Void
     let openMovie: (VodItem) -> Void
-    let previewMovie: (VodItem, CGRect) -> Void
-    let clearPreview: (VodItem) -> Void
+    let showDetailPreview: (VodItem, CGRect) -> Void
     let playMovie: (VodItem) -> Void
 
     var body: some View {
@@ -774,8 +818,7 @@ private struct MovieRail: View {
                             width: 150,
                             posterHeight: 214,
                             openMovie: openMovie,
-                            previewMovie: previewMovie,
-                            clearPreview: clearPreview,
+                            showDetailPreview: showDetailPreview,
                             playMovie: playMovie
                         )
                     }
@@ -795,19 +838,51 @@ private struct MoviePosterGrid: View {
     let isLoading: Bool
     let selectedMovieID: VodItem.ID?
     let openMovie: (VodItem) -> Void
-    let previewMovie: (VodItem, CGRect) -> Void
-    let clearPreview: (VodItem) -> Void
+    let showDetailPreview: (VodItem, CGRect) -> Void
+    let clearDetailPreview: () -> Void
     let playMovie: (VodItem) -> Void
 
     private let columns = [
         GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 16)
     ]
+    private let rowCount = 2
+    private let minimumColumnWidth: CGFloat = 150
+    private let columnSpacing: CGFloat = 16
+
+    @State private var batchIndex = 0
+    @State private var gridWidth: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("全部影片")
-                .font(.title2.weight(.black))
-                .foregroundStyle(CinemaTheme.textPrimary)
+            HStack(alignment: .firstTextBaseline) {
+                Text("全部影片")
+                    .font(.title2.weight(.black))
+                    .foregroundStyle(CinemaTheme.textPrimary)
+
+                if !movies.isEmpty {
+                    Text("\(visibleMovies.count) 部正在展示")
+                        .font(.callout)
+                        .foregroundStyle(CinemaTheme.textTertiary)
+                }
+
+                Spacer()
+
+                Button(action: showNextBatch) {
+                    Label("换一批", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.caption.weight(.bold))
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(canShuffle ? CinemaTheme.textPrimary : CinemaTheme.textTertiary)
+                .background(CinemaTheme.elevatedBackground, in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(CinemaTheme.separator, lineWidth: 1)
+                }
+                .disabled(!canShuffle)
+                .help(canShuffle ? "换一批全部影片" : "暂无更多全部影片")
+            }
                 .background {
                     GeometryReader { proxy in
                         Color.clear.preference(
@@ -826,15 +901,14 @@ private struct MoviePosterGrid: View {
                     }
             } else {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
-                    ForEach(movies) { movie in
+                    ForEach(visibleMovies) { movie in
                         MoviePosterCard(
                             movie: movie,
                             isSelected: selectedMovieID == movie.id,
                             width: nil,
                             posterHeight: 228,
                             openMovie: openMovie,
-                            previewMovie: previewMovie,
-                            clearPreview: clearPreview,
+                            showDetailPreview: showDetailPreview,
                             playMovie: playMovie
                         )
                         .task {
@@ -843,6 +917,57 @@ private struct MoviePosterGrid: View {
                     }
                 }
             }
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(key: MovieGridWidthPreferenceKey.self, value: proxy.size.width)
+            }
+        }
+        .onPreferenceChange(MovieGridWidthPreferenceKey.self) { width in
+            gridWidth = width
+            clampBatchIndex()
+        }
+        .onChange(of: movies.first?.id) { _, _ in
+            batchIndex = 0
+        }
+        .onChange(of: movies.count) { _, _ in
+            clampBatchIndex()
+        }
+    }
+
+    private var visibleMovies: [VodItem] {
+        guard !movies.isEmpty else { return [] }
+        let size = batchSize
+        let start = min(batchIndex * size, max(movies.count - 1, 0))
+        return Array(movies.dropFirst(start).prefix(size))
+    }
+
+    private var batchSize: Int {
+        max(columnCount * rowCount, 1)
+    }
+
+    private var columnCount: Int {
+        guard gridWidth > 0 else { return 5 }
+        return max(Int((gridWidth + columnSpacing) / (minimumColumnWidth + columnSpacing)), 1)
+    }
+
+    private var batchCount: Int {
+        max(Int(ceil(Double(movies.count) / Double(batchSize))), 1)
+    }
+
+    private var canShuffle: Bool {
+        movies.count > batchSize
+    }
+
+    private func showNextBatch() {
+        guard canShuffle else { return }
+        clearDetailPreview()
+        batchIndex = (batchIndex + 1) % batchCount
+    }
+
+    private func clampBatchIndex() {
+        if batchIndex >= batchCount {
+            batchIndex = 0
         }
     }
 }
@@ -885,6 +1010,30 @@ private struct AllMoviesSectionYPreferenceKey: PreferenceKey {
     }
 }
 
+private struct MovieBrowserScrollYPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat? = nil
+
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        value = nextValue() ?? value
+    }
+}
+
+private struct MovieGridWidthPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct BrowserHeaderHeightPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 private struct MoviePosterCard: View {
     @EnvironmentObject private var favorites: FavoritesStore
 
@@ -893,8 +1042,7 @@ private struct MoviePosterCard: View {
     let width: CGFloat?
     let posterHeight: CGFloat
     let openMovie: (VodItem) -> Void
-    var previewMovie: ((VodItem, CGRect) -> Void)? = nil
-    var clearPreview: ((VodItem) -> Void)? = nil
+    var showDetailPreview: ((VodItem, CGRect) -> Void)? = nil
     var playMovie: ((VodItem) -> Void)? = nil
 
     @State private var isHovering = false
@@ -902,6 +1050,7 @@ private struct MoviePosterCard: View {
 
     var body: some View {
         Button {
+            showDetailPreview?(movie, cardFrame)
             openMovie(movie)
         } label: {
             VStack(alignment: .leading, spacing: 9) {
@@ -991,11 +1140,6 @@ private struct MoviePosterCard: View {
         )
         .onHover { isHovering in
             self.isHovering = isHovering
-            if isHovering {
-                previewMovie?(movie, cardFrame)
-            } else {
-                clearPreview?(movie)
-            }
         }
         .help(playMovie == nil ? "单击查看详情" : "单击查看详情，双击播放")
         .animation(.easeOut(duration: 0.14), value: isHovering)
@@ -1011,9 +1155,6 @@ private struct MoviePosterCard: View {
                 }
                 .onChange(of: frame) { _, newFrame in
                     cardFrame = newFrame
-                    if isHovering {
-                        previewMovie?(movie, newFrame)
-                    }
                 }
         }
     }
@@ -1040,12 +1181,12 @@ private struct MoviePosterCard: View {
 
 }
 
-private struct HoveredMoviePreview {
+private struct MovieCardDetailPreview {
     let movie: VodItem
     let frame: CGRect
 }
 
-private struct MovieHoverDetailCard: View {
+private struct MovieCardDetailPopover: View {
     let movie: VodItem
 
     var body: some View {

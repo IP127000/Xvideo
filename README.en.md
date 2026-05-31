@@ -8,7 +8,7 @@ The project is focused on everyday watching: browsing categories, searching titl
 
 ## Preview
 
-The main window now uses a two-column cinematic layout: media library, categories, and source management on the left; the upper-right area shows the selected title details, with featured picks and the full catalog below. Selecting a title refreshes the upper detail panel; choose Start Playback to enter the dedicated player page.
+The main window now uses a two-column cinematic layout: media library, categories, and source management on the left; the upper-right area shows the selected title details, with featured picks and the full catalog below. Clicking a title card opens quick details and refreshes the upper detail panel; double-click a card or choose Start Playback to enter the dedicated player page.
 
 ![Xvideo macOS app preview](Docs/images/app-preview-blurred.png)
 
@@ -16,7 +16,7 @@ The main window now uses a two-column cinematic layout: media library, categorie
 
 - Browse latest updates and video categories
 - Use a two-column cinematic interface with an inline detail panel and a separate playback page
-- Prioritize favorites in Featured Picks and shuffle to another batch
+- Prioritize favorites in Featured Picks, and browse the full catalog in two-row shuffle batches
 - Search by title, actor, or keyword
 - View poster, summary, region, year, cast, director, and update status
 - Ships with no built-in data source; add your own collection API before browsing
