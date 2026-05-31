@@ -30,6 +30,7 @@ private struct MovieListBrowserView: View {
     @State private var isFilterPanelManuallyOpened = false
     @State private var isAllMoviesSectionActive = false
     @State private var featuredBatchIndex = 0
+    @State private var hoveredMovie: VodItem?
     private let featuredMovieLimit = 10
 
     var body: some View {
@@ -59,7 +60,10 @@ private struct MovieListBrowserView: View {
                             selectedMovieID: library.selectedMovie?.id,
                             canShuffle: featuredCandidates.count > featuredMovieLimit,
                             shuffleMovies: showNextFeaturedBatch,
-                            openMovie: openMovie
+                            openMovie: openMovie,
+                            previewMovie: previewMovie,
+                            clearPreview: clearPreview,
+                            playMovie: playMovieFromCard
                         )
 
                         MoviePosterGrid(
@@ -67,7 +71,10 @@ private struct MovieListBrowserView: View {
                             paginationAnchor: library.movies.last,
                             isLoading: library.isLoadingList,
                             selectedMovieID: library.selectedMovie?.id,
-                            openMovie: openMovie
+                            openMovie: openMovie,
+                            previewMovie: previewMovie,
+                            clearPreview: clearPreview,
+                            playMovie: playMovieFromCard
                         )
                         .padding(.horizontal, 24)
 
@@ -194,7 +201,7 @@ private struct MovieListBrowserView: View {
     }
 
     private var spotlightMovie: VodItem? {
-        library.selectedMovie ?? library.movies.first
+        hoveredMovie ?? library.selectedMovie ?? library.movies.first
     }
 
     private var railMovies: [VodItem] {
@@ -243,6 +250,24 @@ private struct MovieListBrowserView: View {
         let batchCount = max(Int(ceil(Double(featuredCandidates.count) / Double(featuredMovieLimit))), 1)
         if featuredBatchIndex >= batchCount {
             featuredBatchIndex = 0
+        }
+    }
+
+    private func previewMovie(_ movie: VodItem) {
+        hoveredMovie = movie
+    }
+
+    private func clearPreview(_ movie: VodItem) {
+        if hoveredMovie?.id == movie.id {
+            hoveredMovie = nil
+        }
+    }
+
+    private func playMovieFromCard(_ movie: VodItem) {
+        openMovie(movie)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            playMovie()
         }
     }
 
@@ -674,6 +699,9 @@ private struct MovieRail: View {
     let canShuffle: Bool
     let shuffleMovies: () -> Void
     let openMovie: (VodItem) -> Void
+    let previewMovie: (VodItem) -> Void
+    let clearPreview: (VodItem) -> Void
+    let playMovie: (VodItem) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -712,7 +740,10 @@ private struct MovieRail: View {
                             isSelected: selectedMovieID == movie.id,
                             width: 150,
                             posterHeight: 214,
-                            openMovie: openMovie
+                            openMovie: openMovie,
+                            previewMovie: previewMovie,
+                            clearPreview: clearPreview,
+                            playMovie: playMovie
                         )
                     }
                 }
@@ -731,6 +762,9 @@ private struct MoviePosterGrid: View {
     let isLoading: Bool
     let selectedMovieID: VodItem.ID?
     let openMovie: (VodItem) -> Void
+    let previewMovie: (VodItem) -> Void
+    let clearPreview: (VodItem) -> Void
+    let playMovie: (VodItem) -> Void
 
     private let columns = [
         GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 16)
@@ -765,7 +799,10 @@ private struct MoviePosterGrid: View {
                             isSelected: selectedMovieID == movie.id,
                             width: nil,
                             posterHeight: 228,
-                            openMovie: openMovie
+                            openMovie: openMovie,
+                            previewMovie: previewMovie,
+                            clearPreview: clearPreview,
+                            playMovie: playMovie
                         )
                         .task {
                             await library.loadBrowsableGridPageIfNeeded(current: movie)
@@ -823,6 +860,9 @@ private struct MoviePosterCard: View {
     let width: CGFloat?
     let posterHeight: CGFloat
     let openMovie: (VodItem) -> Void
+    var previewMovie: ((VodItem) -> Void)? = nil
+    var clearPreview: ((VodItem) -> Void)? = nil
+    var playMovie: ((VodItem) -> Void)? = nil
 
     @State private var isHovering = false
 
@@ -851,6 +891,24 @@ private struct MoviePosterCard: View {
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .allowsHitTesting(false)
+
+                    if isHovering {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Label("双击播放", systemImage: "play.fill")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 6)
+                                    .background(.black.opacity(0.72), in: Capsule())
+                                Spacer()
+                            }
+                            .padding(10)
+                        }
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 5) {
@@ -884,7 +942,20 @@ private struct MoviePosterCard: View {
         }
         .buttonStyle(.plain)
         .scaleEffect(isHovering ? 1.025 : 1)
-        .onHover { isHovering = $0 }
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded {
+                playMovie?(movie)
+            }
+        )
+        .onHover { isHovering in
+            self.isHovering = isHovering
+            if isHovering {
+                previewMovie?(movie)
+            } else {
+                clearPreview?(movie)
+            }
+        }
+        .help(playMovie == nil ? "单击查看详情" : "单击查看详情，双击播放")
         .animation(.easeOut(duration: 0.14), value: isHovering)
         .animation(.easeOut(duration: 0.14), value: isSelected)
     }
