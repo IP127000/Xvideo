@@ -3,8 +3,26 @@ import Foundation
 struct FavoriteMovie: Codable, Identifiable, Hashable {
     let item: VodItem
     let addedAt: Date
+    let sourceID: VideoSource.ID?
+    let sourceName: String?
 
-    var id: Int { item.id }
+    var id: String {
+        "\(sourceID?.uuidString ?? "legacy")-\(item.id)"
+    }
+
+    init(item: VodItem, addedAt: Date, source: VideoSource?) {
+        self.item = item
+        self.addedAt = addedAt
+        sourceID = source?.id
+        sourceName = source?.name
+    }
+
+    func matches(_ candidate: VodItem, sourceID candidateSourceID: VideoSource.ID?) -> Bool {
+        guard item.id == candidate.id else { return false }
+        guard let sourceID else { return true }
+        guard let candidateSourceID else { return false }
+        return sourceID == candidateSourceID
+    }
 }
 
 @MainActor
@@ -32,16 +50,16 @@ final class FavoritesStore: ObservableObject {
         load()
     }
 
-    func isFavorite(_ item: VodItem?) -> Bool {
+    func isFavorite(_ item: VodItem?, sourceID: VideoSource.ID?) -> Bool {
         guard let item else { return false }
-        return items.contains { $0.id == item.id }
+        return items.contains { $0.matches(item, sourceID: sourceID) }
     }
 
-    func toggle(_ item: VodItem) {
-        if let index = items.firstIndex(where: { $0.id == item.id }) {
+    func toggle(_ item: VodItem, source: VideoSource?) {
+        if let index = items.firstIndex(where: { $0.matches(item, sourceID: source?.id) }) {
             items.remove(at: index)
         } else {
-            items.insert(FavoriteMovie(item: item, addedAt: Date()), at: 0)
+            items.insert(FavoriteMovie(item: item, addedAt: Date(), source: source), at: 0)
         }
 
         save()

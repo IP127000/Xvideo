@@ -74,9 +74,9 @@ struct MovieDetailView: View {
                         DetailHeroSection(
                             movie: movie,
                             isLoadingDetail: library.isLoadingDetail,
-                            isFavorite: favorites.isFavorite(movie)
+                            isFavorite: favorites.isFavorite(movie, sourceID: library.activeVideoSourceID)
                         ) {
-                            favorites.toggle(movie)
+                            favorites.toggle(movie, source: library.activeVideoSource)
                         }
 
                         if !playbackSources.isEmpty {
@@ -165,7 +165,7 @@ struct MovieDetailView: View {
         ZStack(alignment: .topTrailing) {
             CinemaTheme.appBackground
             RadialGradient(
-                colors: [CinemaTheme.accent.opacity(favorites.isFavorite(movie) ? 0.28 : 0.18), .clear],
+                colors: [CinemaTheme.accent.opacity(favorites.isFavorite(movie, sourceID: library.activeVideoSourceID) ? 0.28 : 0.18), .clear],
                 center: .topTrailing,
                 startRadius: 20,
                 endRadius: 520

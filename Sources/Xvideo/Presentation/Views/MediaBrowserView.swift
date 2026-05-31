@@ -4,13 +4,14 @@ struct MediaBrowserView: View {
     @Binding var searchDraft: String
     @Binding var selectedSection: LibrarySection
     let openMovie: (VodItem) -> Void
+    let openFavorite: (FavoriteMovie) -> Void
     let playMovie: () -> Void
 
     var body: some View {
         Group {
             switch selectedSection {
             case .favorites:
-                FavoritesBrowserView(openMovie: openMovie)
+                FavoritesBrowserView(openFavorite: openFavorite)
             case .home, .category:
                 MovieListBrowserView(searchDraft: $searchDraft, openMovie: openMovie, playMovie: playMovie)
             }
@@ -254,10 +255,9 @@ private struct MovieListBrowserView: View {
     }
 
     private var featuredCandidates: [VodItem] {
-        let favoriteIDs = Set(favorites.items.map(\.id))
         return library.movies.enumerated().sorted { lhs, rhs in
-            let lhsFavorite = favoriteIDs.contains(lhs.element.id)
-            let rhsFavorite = favoriteIDs.contains(rhs.element.id)
+            let lhsFavorite = favorites.isFavorite(lhs.element, sourceID: library.activeVideoSourceID)
+            let rhsFavorite = favorites.isFavorite(rhs.element, sourceID: library.activeVideoSourceID)
 
             if lhsFavorite != rhsFavorite {
                 return lhsFavorite && !rhsFavorite
@@ -1036,6 +1036,7 @@ private struct BrowserHeaderHeightPreferenceKey: PreferenceKey {
 
 private struct MoviePosterCard: View {
     @EnvironmentObject private var favorites: FavoritesStore
+    @EnvironmentObject private var library: LibraryViewModel
 
     let movie: VodItem
     let isSelected: Bool
@@ -1058,7 +1059,7 @@ private struct MoviePosterCard: View {
                     PosterView(url: movie.posterURL, width: posterWidth, height: posterHeight)
                         .frame(maxWidth: width ?? .infinity)
 
-                    if favorites.isFavorite(movie) {
+                    if favorites.isFavorite(movie, sourceID: library.activeVideoSourceID) {
                         Image(systemName: "heart.fill")
                             .font(.caption.weight(.bold))
                             .foregroundStyle(.white)
@@ -1289,7 +1290,7 @@ private extension VodItem {
 private struct FavoritesBrowserView: View {
     @EnvironmentObject private var favorites: FavoritesStore
 
-    let openMovie: (VodItem) -> Void
+    let openFavorite: (FavoriteMovie) -> Void
 
     private let columns = [
         GridItem(.adaptive(minimum: 158, maximum: 198), spacing: 16)
@@ -1324,7 +1325,7 @@ private struct FavoritesBrowserView: View {
                                 isSelected: false,
                                 width: nil,
                                 posterHeight: 238,
-                                openMovie: openMovie
+                                openMovie: { _ in openFavorite(favorite) }
                             )
                         }
                     }

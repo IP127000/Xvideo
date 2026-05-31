@@ -376,7 +376,7 @@ final class LibraryViewModel: ObservableObject {
         errorMessage = nil
 
         if let first = favorites.first {
-            await selectMovie(first.item)
+            await selectFavorite(first)
         } else {
             detailRequestID = UUID()
             selectedMovie = nil
@@ -421,8 +421,18 @@ final class LibraryViewModel: ObservableObject {
         await loadOnlineList(reset: false)
     }
 
-    func selectMovie(_ item: VodItem) async {
-        let cachedListItem = movieFromCache(matching: item) ?? item
+    func selectFavorite(_ favorite: FavoriteMovie) async {
+        if let sourceID = favorite.sourceID,
+           sourceID != activeVideoSourceID,
+           let source = videoSources.first(where: { $0.id == sourceID }) {
+            await selectVideoSource(source)
+        }
+
+        await selectMovie(favorite.item, preferProvidedItem: true)
+    }
+
+    func selectMovie(_ item: VodItem, preferProvidedItem: Bool = false) async {
+        let cachedListItem = preferProvidedItem ? item : (movieFromCache(matching: item) ?? item)
         selectedMovie = cachedListItem
         detailMovie = nil
         isLoadingDetail = true
@@ -431,7 +441,7 @@ final class LibraryViewModel: ObservableObject {
         let requestID = UUID()
         detailRequestID = requestID
 
-        if let cachedDetail = detailCache[item.id] {
+        if !preferProvidedItem, let cachedDetail = detailCache[item.id] {
             detailMovie = cachedDetail
             isLoadingDetail = false
             return
