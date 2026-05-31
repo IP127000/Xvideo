@@ -23,7 +23,7 @@ The main window now uses a two-column cinematic layout: media library, categorie
 - Switch between multiple data and playback sources, including JSON, XML, and flat XML category APIs
 - Jump to the previous or next episode from the player
 - Rewind or fast-forward 15 seconds, and close the playback window with Esc
-- Favorite videos with their source attached, then reopen them quickly from My Favorites
+- Favorite videos with their source attached, then click or double-click them in My Favorites to continue watching
 - Download available mp4 resources to `~/Downloads/Xvideo`
 
 ## Run

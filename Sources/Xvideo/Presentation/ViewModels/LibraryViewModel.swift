@@ -192,10 +192,15 @@ final class LibraryViewModel: ObservableObject {
         return result
     }
 
-    func selectVideoSource(_ source: VideoSource) async {
-        guard let storedSource = videoSources.first(where: { $0.id == source.id }),
-              storedSource.id != activeVideoSourceID else {
-            return
+    @discardableResult
+    func selectVideoSource(_ source: VideoSource) async -> Bool {
+        guard let storedSource = videoSources.first(where: { $0.id == source.id }) else {
+            errorMessage = "无法启用该视频源：来源已不存在。"
+            return false
+        }
+
+        guard storedSource.id != activeVideoSourceID else {
+            return true
         }
 
         isSwitchingVideoSource = true
@@ -206,13 +211,14 @@ final class LibraryViewModel: ObservableObject {
         } catch {
             isSwitchingVideoSource = false
             errorMessage = "无法启用该视频源：\(error.localizedDescription)"
-            return
+            return false
         }
 
         activeVideoSourceID = storedSource.id
         repository.updateSource(storedSource)
         persistVideoSources()
         await reloadForActiveSource()
+        return activeVideoSourceID == storedSource.id
     }
 
     func deleteVideoSource(_ source: VideoSource) async {
@@ -421,14 +427,21 @@ final class LibraryViewModel: ObservableObject {
         await loadOnlineList(reset: false)
     }
 
-    func selectFavorite(_ favorite: FavoriteMovie) async {
+    @discardableResult
+    func selectFavorite(_ favorite: FavoriteMovie) async -> Bool {
         if let sourceID = favorite.sourceID,
            sourceID != activeVideoSourceID,
            let source = videoSources.first(where: { $0.id == sourceID }) {
-            await selectVideoSource(source)
+            guard await selectVideoSource(source) else { return false }
+        } else if favorite.sourceID != nil,
+                  videoSources.first(where: { $0.id == favorite.sourceID }) == nil,
+                  favorite.item.vodPlayURL?.nilIfBlank == nil {
+            errorMessage = "收藏所属的数据源已不可用，无法重新加载详情。"
+            return false
         }
 
         await selectMovie(favorite.item, preferProvidedItem: true)
+        return true
     }
 
     func selectMovie(_ item: VodItem, preferProvidedItem: Bool = false) async {

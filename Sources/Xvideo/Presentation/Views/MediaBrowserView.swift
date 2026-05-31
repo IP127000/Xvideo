@@ -5,13 +5,14 @@ struct MediaBrowserView: View {
     @Binding var selectedSection: LibrarySection
     let openMovie: (VodItem) -> Void
     let openFavorite: (FavoriteMovie) -> Void
+    let playFavorite: (FavoriteMovie) -> Void
     let playMovie: () -> Void
 
     var body: some View {
         Group {
             switch selectedSection {
             case .favorites:
-                FavoritesBrowserView(openFavorite: openFavorite)
+                FavoritesBrowserView(openFavorite: openFavorite, playFavorite: playFavorite)
             case .home, .category:
                 MovieListBrowserView(searchDraft: $searchDraft, openMovie: openMovie, playMovie: playMovie)
             }
@@ -1042,6 +1043,7 @@ private struct MoviePosterCard: View {
     let isSelected: Bool
     let width: CGFloat?
     let posterHeight: CGFloat
+    var showsFavoriteBadge: Bool? = nil
     let openMovie: (VodItem) -> Void
     var showDetailPreview: ((VodItem, CGRect) -> Void)? = nil
     var playMovie: ((VodItem) -> Void)? = nil
@@ -1059,7 +1061,7 @@ private struct MoviePosterCard: View {
                     PosterView(url: movie.posterURL, width: posterWidth, height: posterHeight)
                         .frame(maxWidth: width ?? .infinity)
 
-                    if favorites.isFavorite(movie, sourceID: library.activeVideoSourceID) {
+                    if shouldShowFavoriteBadge {
                         Image(systemName: "heart.fill")
                             .font(.caption.weight(.bold))
                             .foregroundStyle(.white)
@@ -1180,6 +1182,10 @@ private struct MoviePosterCard: View {
         width ?? 164
     }
 
+    private var shouldShowFavoriteBadge: Bool {
+        showsFavoriteBadge ?? favorites.isFavorite(movie, sourceID: library.activeVideoSourceID)
+    }
+
 }
 
 private struct MovieCardDetailPreview {
@@ -1291,6 +1297,7 @@ private struct FavoritesBrowserView: View {
     @EnvironmentObject private var favorites: FavoritesStore
 
     let openFavorite: (FavoriteMovie) -> Void
+    let playFavorite: (FavoriteMovie) -> Void
 
     private let columns = [
         GridItem(.adaptive(minimum: 158, maximum: 198), spacing: 16)
@@ -1325,7 +1332,9 @@ private struct FavoritesBrowserView: View {
                                 isSelected: false,
                                 width: nil,
                                 posterHeight: 238,
-                                openMovie: { _ in openFavorite(favorite) }
+                                showsFavoriteBadge: true,
+                                openMovie: { _ in openFavorite(favorite) },
+                                playMovie: { _ in playFavorite(favorite) }
                             )
                         }
                     }

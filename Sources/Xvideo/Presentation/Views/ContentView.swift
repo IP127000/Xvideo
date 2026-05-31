@@ -27,6 +27,7 @@ struct ContentView: View {
                         selectedSection: $selectedSection,
                         openMovie: openMovie,
                         openFavorite: openFavorite,
+                        playFavorite: playFavorite,
                         playMovie: { route = .watch }
                     )
                     .opacity(route == .browse ? 1 : 0)
@@ -86,8 +87,17 @@ struct ContentView: View {
 
     private func openFavorite(_ favorite: FavoriteMovie) {
         Task {
-            await library.selectFavorite(favorite)
-            route = .browse
+            if await library.selectFavorite(favorite) {
+                route = .watch
+            }
+        }
+    }
+
+    private func playFavorite(_ favorite: FavoriteMovie) {
+        Task {
+            if await library.selectFavorite(favorite) {
+                route = .watch
+            }
         }
     }
 }
