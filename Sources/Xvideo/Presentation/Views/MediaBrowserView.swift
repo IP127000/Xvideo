@@ -30,7 +30,7 @@ private struct MovieListBrowserView: View {
     @State private var isFilterPanelManuallyOpened = false
     @State private var isAllMoviesSectionActive = false
     @State private var featuredBatchIndex = 0
-    @State private var hoveredMovie: VodItem?
+    @State private var hoveredPreview: HoveredMoviePreview?
     private let featuredMovieLimit = 10
 
     var body: some View {
@@ -45,52 +45,65 @@ private struct MovieListBrowserView: View {
                     .foregroundStyle(CinemaTheme.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 28) {
-                        if let spotlightMovie {
-                            SpotlightHero(movie: spotlightMovie, playMovie: playMovie)
+                GeometryReader { containerProxy in
+                    ZStack(alignment: .topLeading) {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 28) {
+                                if let spotlightMovie {
+                                    SpotlightHero(movie: spotlightMovie, playMovie: playMovie)
+                                        .padding(.horizontal, 24)
+                                        .padding(.top, 22)
+                                }
+
+                                MovieRail(
+                                    title: railTitle,
+                                    subtitle: "\(railMovies.count) 部正在展示",
+                                    movies: railMovies,
+                                    selectedMovieID: library.selectedMovie?.id,
+                                    canShuffle: featuredCandidates.count > featuredMovieLimit,
+                                    shuffleMovies: showNextFeaturedBatch,
+                                    openMovie: openMovie,
+                                    previewMovie: showHoverPreview,
+                                    clearPreview: clearHoverPreview,
+                                    playMovie: playMovieFromCard
+                                )
+
+                                MoviePosterGrid(
+                                    movies: gridMovies,
+                                    paginationAnchor: library.movies.last,
+                                    isLoading: library.isLoadingList,
+                                    selectedMovieID: library.selectedMovie?.id,
+                                    openMovie: openMovie,
+                                    previewMovie: showHoverPreview,
+                                    clearPreview: clearHoverPreview,
+                                    playMovie: playMovieFromCard
+                                )
                                 .padding(.horizontal, 24)
-                                .padding(.top, 22)
+
+                                if library.isLoadingList {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 16)
+                                }
+                            }
+                            .padding(.bottom, 32)
+                        }
+                        .coordinateSpace(name: "movieBrowserScroll")
+                        .onPreferenceChange(AllMoviesSectionYPreferenceKey.self) { sectionY in
+                            guard let sectionY else { return }
+                            isAllMoviesSectionActive = sectionY < 180
                         }
 
-                        MovieRail(
-                            title: railTitle,
-                            subtitle: "\(railMovies.count) 部正在展示",
-                            movies: railMovies,
-                            selectedMovieID: library.selectedMovie?.id,
-                            canShuffle: featuredCandidates.count > featuredMovieLimit,
-                            shuffleMovies: showNextFeaturedBatch,
-                            openMovie: openMovie,
-                            previewMovie: previewMovie,
-                            clearPreview: clearPreview,
-                            playMovie: playMovieFromCard
-                        )
-
-                        MoviePosterGrid(
-                            movies: gridMovies,
-                            paginationAnchor: library.movies.last,
-                            isLoading: library.isLoadingList,
-                            selectedMovieID: library.selectedMovie?.id,
-                            openMovie: openMovie,
-                            previewMovie: previewMovie,
-                            clearPreview: clearPreview,
-                            playMovie: playMovieFromCard
-                        )
-                        .padding(.horizontal, 24)
-
-                        if library.isLoadingList {
-                            ProgressView()
-                                .controlSize(.small)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
+                        if let hoveredPreview {
+                            MovieHoverDetailCard(movie: hoveredPreview.movie)
+                                .frame(width: hoverDetailWidth)
+                                .position(hoverDetailPosition(for: hoveredPreview.frame, in: containerProxy.size))
+                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                                .zIndex(100)
+                                .allowsHitTesting(false)
                         }
                     }
-                    .padding(.bottom, 32)
-                }
-                .coordinateSpace(name: "movieBrowserScroll")
-                .onPreferenceChange(AllMoviesSectionYPreferenceKey.self) { sectionY in
-                    guard let sectionY else { return }
-                    isAllMoviesSectionActive = sectionY < 180
                 }
                 .onChange(of: library.movies.first?.id) { _, _ in
                     featuredBatchIndex = 0
@@ -201,7 +214,7 @@ private struct MovieListBrowserView: View {
     }
 
     private var spotlightMovie: VodItem? {
-        hoveredMovie ?? library.selectedMovie ?? library.movies.first
+        library.selectedMovie ?? library.movies.first
     }
 
     private var railMovies: [VodItem] {
@@ -253,22 +266,42 @@ private struct MovieListBrowserView: View {
         }
     }
 
-    private func previewMovie(_ movie: VodItem) {
-        hoveredMovie = movie
-    }
-
-    private func clearPreview(_ movie: VodItem) {
-        if hoveredMovie?.id == movie.id {
-            hoveredMovie = nil
-        }
-    }
-
     private func playMovieFromCard(_ movie: VodItem) {
         openMovie(movie)
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 120_000_000)
             playMovie()
         }
+    }
+
+    private var hoverDetailWidth: CGFloat { 340 }
+
+    private var hoverDetailHeight: CGFloat { 260 }
+
+    private func showHoverPreview(_ movie: VodItem, frame: CGRect) {
+        hoveredPreview = HoveredMoviePreview(movie: movie, frame: frame)
+    }
+
+    private func clearHoverPreview(_ movie: VodItem) {
+        if hoveredPreview?.movie.id == movie.id {
+            hoveredPreview = nil
+        }
+    }
+
+    private func hoverDetailPosition(for frame: CGRect, in size: CGSize) -> CGPoint {
+        let margin: CGFloat = 14
+        let canOpenRight = frame.maxX + margin + hoverDetailWidth <= size.width
+        let x: CGFloat
+        if canOpenRight {
+            x = frame.maxX + margin + hoverDetailWidth / 2
+        } else {
+            x = max(hoverDetailWidth / 2 + margin, frame.minX - margin - hoverDetailWidth / 2)
+        }
+
+        let minY = hoverDetailHeight / 2 + margin
+        let maxY = max(minY, size.height - hoverDetailHeight / 2 - margin)
+        let y = min(max(frame.minY + hoverDetailHeight / 2, minY), maxY)
+        return CGPoint(x: x, y: y)
     }
 
     private var browserBackdrop: some View {
@@ -699,7 +732,7 @@ private struct MovieRail: View {
     let canShuffle: Bool
     let shuffleMovies: () -> Void
     let openMovie: (VodItem) -> Void
-    let previewMovie: (VodItem) -> Void
+    let previewMovie: (VodItem, CGRect) -> Void
     let clearPreview: (VodItem) -> Void
     let playMovie: (VodItem) -> Void
 
@@ -762,7 +795,7 @@ private struct MoviePosterGrid: View {
     let isLoading: Bool
     let selectedMovieID: VodItem.ID?
     let openMovie: (VodItem) -> Void
-    let previewMovie: (VodItem) -> Void
+    let previewMovie: (VodItem, CGRect) -> Void
     let clearPreview: (VodItem) -> Void
     let playMovie: (VodItem) -> Void
 
@@ -860,11 +893,12 @@ private struct MoviePosterCard: View {
     let width: CGFloat?
     let posterHeight: CGFloat
     let openMovie: (VodItem) -> Void
-    var previewMovie: ((VodItem) -> Void)? = nil
+    var previewMovie: ((VodItem, CGRect) -> Void)? = nil
     var clearPreview: ((VodItem) -> Void)? = nil
     var playMovie: ((VodItem) -> Void)? = nil
 
     @State private var isHovering = false
+    @State private var cardFrame = CGRect.zero
 
     var body: some View {
         Button {
@@ -942,6 +976,8 @@ private struct MoviePosterCard: View {
         }
         .buttonStyle(.plain)
         .scaleEffect(isHovering ? 1.025 : 1)
+        .zIndex(isHovering ? 50 : 0)
+        .background(cardFrameReader)
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
                 playMovie?(movie)
@@ -950,7 +986,7 @@ private struct MoviePosterCard: View {
         .onHover { isHovering in
             self.isHovering = isHovering
             if isHovering {
-                previewMovie?(movie)
+                previewMovie?(movie, cardFrame)
             } else {
                 clearPreview?(movie)
             }
@@ -958,6 +994,22 @@ private struct MoviePosterCard: View {
         .help(playMovie == nil ? "单击查看详情" : "单击查看详情，双击播放")
         .animation(.easeOut(duration: 0.14), value: isHovering)
         .animation(.easeOut(duration: 0.14), value: isSelected)
+    }
+
+    private var cardFrameReader: some View {
+        GeometryReader { proxy in
+            let frame = proxy.frame(in: .named("movieBrowserScroll"))
+            Color.clear
+                .onAppear {
+                    cardFrame = frame
+                }
+                .onChange(of: frame) { _, newFrame in
+                    cardFrame = newFrame
+                    if isHovering {
+                        previewMovie?(movie, newFrame)
+                    }
+                }
+        }
     }
 
     private var cardBackground: some ShapeStyle {
@@ -978,6 +1030,85 @@ private struct MoviePosterCard: View {
 
     private var posterWidth: CGFloat {
         width ?? 164
+    }
+
+}
+
+private struct HoveredMoviePreview {
+    let movie: VodItem
+    let frame: CGRect
+}
+
+private struct MovieHoverDetailCard: View {
+    let movie: VodItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(movie.vodName)
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(CinemaTheme.textPrimary)
+                        .lineLimit(2)
+
+                    Text(metadataText)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(CinemaTheme.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 8)
+
+                Label("双击播放", systemImage: "play.fill")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(CinemaTheme.accent, in: Capsule())
+            }
+
+            Text(movie.summary)
+                .font(.caption)
+                .foregroundStyle(CinemaTheme.textSecondary)
+                .lineLimit(5)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                detailLine(title: "主演", value: movie.vodActor)
+                detailLine(title: "导演", value: movie.vodDirector)
+            }
+        }
+        .padding(14)
+        .background(CinemaTheme.panelBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(CinemaTheme.accent.opacity(0.42), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.38), radius: 24, x: 0, y: 16)
+    }
+
+    private var metadataText: String {
+        [
+            movie.vodYear,
+            movie.vodArea,
+            movie.typeName,
+            movie.vodClass
+        ].compactMap { $0?.nilIfBlank }
+            .joined(separator: " · ")
+            .nilIfBlank ?? "暂无元数据"
+    }
+
+    private func detailLine(title: String, value: String?) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text(title)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(CinemaTheme.textTertiary)
+                .frame(width: 30, alignment: .leading)
+            Text(value?.nilIfBlank ?? "暂无")
+                .font(.caption2)
+                .foregroundStyle(CinemaTheme.textSecondary)
+                .lineLimit(2)
+        }
     }
 }
 
