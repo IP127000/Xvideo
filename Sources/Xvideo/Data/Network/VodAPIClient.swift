@@ -73,7 +73,11 @@ struct VodAPIClient: Sendable {
             URLQueryItem(name: "wd", value: keyword),
             URLQueryItem(name: "pg", value: "\(page)")
         ]
-        return try await request(source: source, url: makeURL(searchURL, queryItems: items))
+        let data = try await requestData(url: makeURL(searchURL, queryItems: items))
+        if isUnsupportedSearchResponse(data) {
+            return VodListResponse(code: 1, page: page, pagecount: 1, total: 0, list: [])
+        }
+        return try decode(data, preferredFormat: source.format)
     }
 
     func fetchCategories(source: VideoSource) async throws -> [VodCategory] {
@@ -176,8 +180,13 @@ struct VodAPIClient: Sendable {
     }
 
     private func request(source: VideoSource, url: URL) async throws -> VodListResponse {
-        let data = try await httpClient.data(from: url, headers: defaultHeaders)
+        let data = try await requestData(url: url)
         return try decode(data, preferredFormat: source.format)
+    }
+
+    private func requestData(url: URL) async throws -> Data {
+        let data = try await httpClient.data(from: url, headers: defaultHeaders)
+        return data
     }
 
     private func decode(_ data: Data, preferredFormat: VideoSourceFormat) throws -> VodListResponse {
@@ -199,6 +208,30 @@ struct VodAPIClient: Sendable {
             return false
         }
         return preview.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<")
+    }
+
+    private func looksLikeJSON(_ data: Data) -> Bool {
+        guard let preview = String(data: data.prefix(64), encoding: .utf8) else {
+            return false
+        }
+
+        let trimmedPreview = preview.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedPreview.hasPrefix("{") || trimmedPreview.hasPrefix("[")
+    }
+
+    private func isUnsupportedSearchResponse(_ data: Data) -> Bool {
+        guard !looksLikeXML(data), !looksLikeJSON(data),
+              let text = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            return false
+        }
+
+        let lowercasedText = text.lowercased()
+        return text.contains("不支持搜索") ||
+            text.contains("暂不支持") ||
+            lowercasedText.contains("search not supported") ||
+            lowercasedText.contains("unsupported search")
     }
 
     private func makeURL(_ url: URL, queryItems: [URLQueryItem]) -> URL {
