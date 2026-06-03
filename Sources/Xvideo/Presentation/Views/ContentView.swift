@@ -28,7 +28,7 @@ struct ContentView: View {
                         openMovie: openMovie,
                         openFavorite: openFavorite,
                         playFavorite: playFavorite,
-                        playMovie: { route = .watch }
+                        playMovie: playMovie
                     )
                     .opacity(route == .browse ? 1 : 0)
                     .allowsHitTesting(route == .browse)
@@ -81,7 +81,13 @@ struct ContentView: View {
     private func openMovie(_ movie: VodItem) {
         Task {
             await library.selectMovie(movie)
-            route = .browse
+        }
+    }
+
+    private func playMovie(_ movie: VodItem) {
+        Task {
+            await library.selectMovie(movie)
+            route = .watch
         }
     }
 

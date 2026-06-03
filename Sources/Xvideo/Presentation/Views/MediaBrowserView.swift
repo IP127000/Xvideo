@@ -6,7 +6,7 @@ struct MediaBrowserView: View {
     let openMovie: (VodItem) -> Void
     let openFavorite: (FavoriteMovie) -> Void
     let playFavorite: (FavoriteMovie) -> Void
-    let playMovie: () -> Void
+    let playMovie: (VodItem) -> Void
 
     var body: some View {
         Group {
@@ -26,7 +26,7 @@ private struct MovieListBrowserView: View {
     @EnvironmentObject private var favorites: FavoritesStore
     @Binding var searchDraft: String
     let openMovie: (VodItem) -> Void
-    let playMovie: () -> Void
+    let playMovie: (VodItem) -> Void
 
     @State private var isHoveringHeaderMore = false
     @State private var isFilterPanelManuallyOpened = false
@@ -54,7 +54,9 @@ private struct MovieListBrowserView: View {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 28) {
                                 if let spotlightMovie {
-                                    SpotlightHero(movie: spotlightMovie, playMovie: playMovie)
+                                    SpotlightHero(movie: spotlightMovie) {
+                                        playMovie(spotlightMovie)
+                                    }
                                         .padding(.horizontal, 24)
                                         .padding(.top, 22)
                                 }
@@ -315,11 +317,7 @@ private struct MovieListBrowserView: View {
     }
 
     private func playMovieFromCard(_ movie: VodItem) {
-        openMovie(movie)
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 120_000_000)
-            playMovie()
-        }
+        playMovie(movie)
     }
 
     private var cardDetailWidth: CGFloat { 430 }

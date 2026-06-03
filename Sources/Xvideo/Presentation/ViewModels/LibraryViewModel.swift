@@ -34,6 +34,11 @@ final class LibraryViewModel: ObservableObject {
         let cachedPage: CachedLibraryPage
     }
 
+    private struct SourceRefreshToken: Equatable {
+        let sourceID: VideoSource.ID
+        let generation: UUID
+    }
+
     private let loadLibraryPage: LoadLibraryPageUseCase
     private let loadMovieDetail: LoadMovieDetailUseCase
     private let libraryCacheStore: LibraryPageCacheStore
@@ -54,6 +59,7 @@ final class LibraryViewModel: ObservableObject {
     private var periodicRefreshTask: Task<Void, Never>?
     private var previewRefreshTask: Task<Void, Never>?
     private var isRebuildingPreviewCache = false
+    private var sourceGeneration = UUID()
 
     init(
         loadLibraryPage: LoadLibraryPageUseCase,
@@ -231,6 +237,7 @@ final class LibraryViewModel: ObservableObject {
             persistVideoSources()
             repository.updateSource(activeVideoSource)
             if activeVideoSource == nil {
+                invalidateSourceScopedWork()
                 resetLibraryStateForSourceChange()
             } else {
                 await reloadForActiveSource()
@@ -264,13 +271,18 @@ final class LibraryViewModel: ObservableObject {
             return
         }
 
-        await loadCategoriesIfNeeded(force: true)
+        let sourceToken = currentSourceRefreshToken()
+        await loadCategoriesIfNeeded(force: true, sourceToken: sourceToken)
 
         if let cachedPage = previewPage(for: selectedCategory) {
             await applyLibraryPage(cachedPage.page, reset: true)
         } else {
             isLoadingList = true
-            await fetchAndStorePreview(category: selectedCategory, applyIfVisible: true)
+            await fetchAndStorePreview(
+                category: selectedCategory,
+                applyIfVisible: true,
+                sourceToken: sourceToken
+            )
             isLoadingList = false
         }
 
@@ -332,7 +344,11 @@ final class LibraryViewModel: ObservableObject {
 
         clearVisibleList()
         isLoadingList = true
-        await fetchAndStorePreview(category: category, applyIfVisible: true)
+        await fetchAndStorePreview(
+            category: category,
+            applyIfVisible: true,
+            sourceToken: currentSourceRefreshToken()
+        )
         isLoadingList = false
     }
 
@@ -574,8 +590,7 @@ final class LibraryViewModel: ObservableObject {
         isSwitchingVideoSource = true
         defer { isSwitchingVideoSource = false }
 
-        previewRefreshTask?.cancel()
-        previewRefreshTask = nil
+        invalidateSourceScopedWork()
         resetLibraryStateForSourceChange()
         await loadInitialData(force: true)
     }
@@ -605,6 +620,12 @@ final class LibraryViewModel: ObservableObject {
         previewCache = [:]
         onlinePageCache = [:]
         isRebuildingPreviewCache = false
+    }
+
+    private func invalidateSourceScopedWork() {
+        sourceGeneration = UUID()
+        previewRefreshTask?.cancel()
+        previewRefreshTask = nil
     }
 
     private func makeVideoSource(
@@ -715,16 +736,19 @@ final class LibraryViewModel: ObservableObject {
         posterFileURLs = await posterCacheStore.cachedFileURLs(for: cachedPosterURLs)
     }
 
-    private func loadCategoriesIfNeeded(force: Bool = false) async {
+    private func loadCategoriesIfNeeded(force: Bool = false, sourceToken: SourceRefreshToken? = nil) async {
         guard hasActiveVideoSource else { return }
         guard force || categories.isEmpty else { return }
+        guard isCurrentSourceRefresh(sourceToken) else { return }
 
         do {
             let loadedCategories = try await loadLibraryPage.fetchCategories()
+            guard isCurrentSourceRefresh(sourceToken) else { return }
             if !loadedCategories.isEmpty {
                 categories = loadedCategories
             }
         } catch {
+            guard isCurrentSourceRefresh(sourceToken) else { return }
             guard !isCancellation(error) else { return }
             if categories.isEmpty {
                 errorMessage = error.localizedDescription
@@ -735,33 +759,44 @@ final class LibraryViewModel: ObservableObject {
     private func schedulePreviewCacheRefresh(applyVisiblePage: Bool) {
         guard previewRefreshTask == nil else { return }
 
+        let sourceToken = currentSourceRefreshToken()
         previewRefreshTask = Task { [weak self] in
             await self?.rebuildPreviewCache(applyVisiblePage: applyVisiblePage)
             await MainActor.run {
+                guard self?.isCurrentSourceRefresh(sourceToken) == true else { return }
                 self?.previewRefreshTask = nil
             }
         }
     }
 
     private func rebuildPreviewCache(applyVisiblePage: Bool) async {
-        guard hasActiveVideoSource else { return }
+        guard let sourceToken = currentSourceRefreshToken() else { return }
         guard !isRebuildingPreviewCache else { return }
 
         isRebuildingPreviewCache = true
         isRefreshingPreviewCache = true
         defer {
-            isRebuildingPreviewCache = false
-            isRefreshingPreviewCache = false
+            if isCurrentSourceRefresh(sourceToken) {
+                isRebuildingPreviewCache = false
+                isRefreshingPreviewCache = false
+            }
         }
 
-        await loadCategoriesIfNeeded()
+        await loadCategoriesIfNeeded(sourceToken: sourceToken)
+        guard isCurrentSourceRefresh(sourceToken) else { return }
 
         let targets = networkPreviewTargets()
         guard !targets.isEmpty else { return }
 
         var remainingTargets = targets
         for attempt in 1...6 {
-            await fetchPreviewBatch(remainingTargets, applyVisiblePage: applyVisiblePage)
+            guard isCurrentSourceRefresh(sourceToken) else { return }
+            await fetchPreviewBatch(
+                remainingTargets,
+                applyVisiblePage: applyVisiblePage,
+                sourceToken: sourceToken
+            )
+            guard isCurrentSourceRefresh(sourceToken) else { return }
             remainingTargets = missingPreviewTargets(from: targets)
 
             guard !remainingTargets.isEmpty, attempt < 6 else {
@@ -771,11 +806,16 @@ final class LibraryViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
         }
 
-        persistPreviewCache()
+        persistPreviewCache(sourceToken: sourceToken)
     }
 
-    private func fetchPreviewBatch(_ targets: [VodCategory?], applyVisiblePage: Bool) async {
+    private func fetchPreviewBatch(
+        _ targets: [VodCategory?],
+        applyVisiblePage: Bool,
+        sourceToken: SourceRefreshToken
+    ) async {
         guard !targets.isEmpty else { return }
+        guard isCurrentSourceRefresh(sourceToken) else { return }
 
         var nextIndex = 0
         var completedCount = 0
@@ -790,12 +830,14 @@ final class LibraryViewModel: ObservableObject {
                 nextIndex += 1
 
                 group.addTask {
+                    guard !Task.isCancelled else { return nil }
                     do {
                         let page = try await loadLibraryPage.fetchPreview(
                             selectedCategory: category,
                             categories: categoriesSnapshot,
                             page: 1
                         )
+                        guard !Task.isCancelled else { return nil }
                         let previewPage = LibraryPage(
                             items: Array(page.items.prefix(previewItemLimit)),
                             page: 1,
@@ -818,27 +860,48 @@ final class LibraryViewModel: ObservableObject {
             }
 
             for _ in 0..<min(previewFetchConcurrency, targets.count) {
+                guard isCurrentSourceRefresh(sourceToken) else { return }
                 submitNext()
             }
 
             while let result = await group.next() {
+                guard isCurrentSourceRefresh(sourceToken) else {
+                    group.cancelAll()
+                    return
+                }
                 if let result {
-                    await applyPreviewResult(result, applyVisiblePage: applyVisiblePage)
+                    await applyPreviewResult(
+                        result,
+                        applyVisiblePage: applyVisiblePage,
+                        sourceToken: sourceToken
+                    )
+                    guard isCurrentSourceRefresh(sourceToken) else {
+                        group.cancelAll()
+                        return
+                    }
                     buildRootPreviewPagesFromChildren()
                     await applyVisibleRootPreviewIfNeeded(applyVisiblePage: applyVisiblePage)
                     completedCount += 1
 
                     if completedCount == 1 || completedCount.isMultiple(of: 6) {
-                        persistPreviewCache()
+                        persistPreviewCache(sourceToken: sourceToken)
                     }
+                }
+                guard isCurrentSourceRefresh(sourceToken) else {
+                    group.cancelAll()
+                    return
                 }
                 submitNext()
             }
         }
     }
 
-    private func fetchAndStorePreview(category: VodCategory?, applyIfVisible: Bool) async {
-        guard hasActiveVideoSource else { return }
+    private func fetchAndStorePreview(
+        category: VodCategory?,
+        applyIfVisible: Bool,
+        sourceToken: SourceRefreshToken?
+    ) async {
+        guard isCurrentSourceRefresh(sourceToken) else { return }
 
         do {
             let page = try await loadLibraryPage.fetchPreview(
@@ -846,6 +909,7 @@ final class LibraryViewModel: ObservableObject {
                 categories: categories,
                 page: 1
             )
+            guard isCurrentSourceRefresh(sourceToken) else { return }
             let previewPage = LibraryPage(
                 items: Array(page.items.prefix(previewItemLimit)),
                 page: 1,
@@ -861,11 +925,17 @@ final class LibraryViewModel: ObservableObject {
                     isComplete: false
                 )
             )
-            await applyPreviewResult(result, applyVisiblePage: applyIfVisible)
+            await applyPreviewResult(
+                result,
+                applyVisiblePage: applyIfVisible,
+                sourceToken: sourceToken
+            )
+            guard isCurrentSourceRefresh(sourceToken) else { return }
             buildRootPreviewPagesFromChildren()
             await applyVisibleRootPreviewIfNeeded(applyVisiblePage: applyIfVisible)
-            persistPreviewCache()
+            persistPreviewCache(sourceToken: sourceToken)
         } catch {
+            guard isCurrentSourceRefresh(sourceToken) else { return }
             guard !isCancellation(error) else { return }
             if applyIfVisible {
                 errorMessage = error.localizedDescription
@@ -873,7 +943,13 @@ final class LibraryViewModel: ObservableObject {
         }
     }
 
-    private func applyPreviewResult(_ result: PreviewPageResult, applyVisiblePage: Bool) async {
+    private func applyPreviewResult(
+        _ result: PreviewPageResult,
+        applyVisiblePage: Bool,
+        sourceToken: SourceRefreshToken?
+    ) async {
+        guard isCurrentSourceRefresh(sourceToken) else { return }
+
         let key = LibraryCacheKey(categoryID: result.categoryID, keyword: "", page: 1)
         previewCache[key] = result.cachedPage
 
@@ -991,8 +1067,9 @@ final class LibraryViewModel: ObservableObject {
         )
     }
 
-    private func persistPreviewCache() {
-        guard let sourceID = activeVideoSourceID else { return }
+    private func persistPreviewCache(sourceToken: SourceRefreshToken?) {
+        guard isCurrentSourceRefresh(sourceToken) else { return }
+        guard let sourceID = sourceToken?.sourceID ?? activeVideoSourceID else { return }
 
         let categoriesSnapshot = categories
         let pagesSnapshot = previewCache
@@ -1017,6 +1094,17 @@ final class LibraryViewModel: ObservableObject {
                 self?.posterFileURLs.merge(files) { current, _ in current }
             }
         }
+    }
+
+    private func currentSourceRefreshToken() -> SourceRefreshToken? {
+        guard let activeVideoSourceID else { return nil }
+        return SourceRefreshToken(sourceID: activeVideoSourceID, generation: sourceGeneration)
+    }
+
+    private func isCurrentSourceRefresh(_ sourceToken: SourceRefreshToken?) -> Bool {
+        guard !Task.isCancelled else { return false }
+        guard let sourceToken else { return hasActiveVideoSource }
+        return activeVideoSourceID == sourceToken.sourceID && sourceGeneration == sourceToken.generation
     }
 
     private var cachedItems: [VodItem] {
