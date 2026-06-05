@@ -4,7 +4,7 @@
 
 Xvideo is a native macOS video client built with SwiftUI. It fetches video lists, details, and playback sources from user-configured media APIs, then presents them in a desktop-style browsing and playback experience.
 
-The project is focused on everyday watching: browsing categories, searching titles, reading details, switching episodes, saving favorites, and playing videos inside the app.
+The project is focused on everyday watching: browsing categories, searching titles, reading details, switching episodes, tracking local watch progress, saving favorites, and playing videos inside the app.
 
 ## Preview
 
@@ -23,6 +23,7 @@ The main window now uses a two-column cinematic layout: media library, categorie
 - Switch between multiple data and playback sources, including JSON, XML, and flat XML category APIs
 - Jump to the previous or next episode from the player
 - Rewind or fast-forward 15 seconds, and close the playback window with Esc
+- Track local watch progress while episodes play, then resume the last episode and playback time from Continue Watching
 - Favorite videos with their source attached, then click or double-click them in My Favorites to continue watching
 - Download available mp4 resources to `~/Downloads/Xvideo`
 

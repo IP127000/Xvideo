@@ -4,6 +4,7 @@ struct MovieDetailView: View {
     @EnvironmentObject private var library: LibraryViewModel
     @EnvironmentObject private var downloads: DownloadManager
     @EnvironmentObject private var favorites: FavoritesStore
+    @EnvironmentObject private var watchProgress: WatchProgressStore
 
     @Binding var selectedPlaybackSourceID: PlaybackSource.ID?
     @Binding var selectedEpisode: Episode?
@@ -61,20 +62,26 @@ struct MovieDetailView: View {
                         )
 
                         PlayerPanel(
+                            movie: movie,
+                            source: library.activeVideoSource,
                             episode: selectedEpisode,
+                            playbackSource: selectedSource,
                             playlistEpisodes: selectedSource?.episodes ?? [],
                             previousEpisode: previousEpisode,
                             nextEpisode: nextEpisode,
+                            resumeProgress: watchProgress.progress(for: movie, sourceID: library.activeVideoSourceID),
                             playPreviousEpisode: playPreviousEpisode,
                             playNextEpisode: playNextEpisode,
-                            didAdvanceToEpisode: { selectedEpisode = $0 }
+                            didAdvanceToEpisode: { selectedEpisode = $0 },
+                            didUpdateWatchProgress: recordWatchProgress
                         )
                         .frame(minHeight: 420, idealHeight: 500)
 
                         DetailHeroSection(
                             movie: movie,
                             isLoadingDetail: library.isLoadingDetail,
-                            isFavorite: favorites.isFavorite(movie, sourceID: library.activeVideoSourceID)
+                            isFavorite: favorites.isFavorite(movie, sourceID: library.activeVideoSourceID),
+                            watchProgress: watchProgress.progress(for: movie, sourceID: library.activeVideoSourceID)
                         ) {
                             favorites.toggle(movie, source: library.activeVideoSource)
                         }
@@ -191,6 +198,22 @@ struct MovieDetailView: View {
             .episodes
             .first
     }
+
+    private func recordWatchProgress(
+        episode: Episode,
+        positionSeconds: Double,
+        durationSeconds: Double?
+    ) {
+        guard let movie else { return }
+        watchProgress.record(
+            item: movie,
+            source: library.activeVideoSource,
+            playbackSource: selectedSource,
+            episode: episode,
+            positionSeconds: positionSeconds,
+            durationSeconds: durationSeconds
+        )
+    }
 }
 
 private struct PlayerPageHeader: View {
@@ -242,6 +265,7 @@ private struct DetailHeroSection: View {
     let movie: VodItem
     let isLoadingDetail: Bool
     let isFavorite: Bool
+    let watchProgress: WatchProgressItem?
     let toggleFavorite: () -> Void
 
     var body: some View {
@@ -286,6 +310,20 @@ private struct DetailHeroSection: View {
                 }
 
                 MetadataLine(movie: movie)
+
+                if let watchProgress {
+                    HStack(spacing: 8) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.caption.weight(.bold))
+                        Text("上次看到 \(watchProgress.positionLabel)")
+                            .font(.callout.weight(.semibold))
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(CinemaTheme.accentHot)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(CinemaTheme.accentHot.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                }
 
                 Text(movie.summary)
                     .font(.body)

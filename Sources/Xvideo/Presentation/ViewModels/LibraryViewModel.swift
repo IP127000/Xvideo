@@ -460,6 +460,23 @@ final class LibraryViewModel: ObservableObject {
         return true
     }
 
+    @discardableResult
+    func selectWatchProgress(_ progress: WatchProgressItem) async -> Bool {
+        if let sourceID = progress.sourceID,
+           sourceID != activeVideoSourceID,
+           let source = videoSources.first(where: { $0.id == sourceID }) {
+            guard await selectVideoSource(source) else { return false }
+        } else if progress.sourceID != nil,
+                  videoSources.first(where: { $0.id == progress.sourceID }) == nil,
+                  progress.item.vodPlayURL?.nilIfBlank == nil {
+            errorMessage = "观看记录所属的数据源已不可用，无法继续播放。"
+            return false
+        }
+
+        await selectMovie(progress.item, preferProvidedItem: true)
+        return true
+    }
+
     func selectMovie(_ item: VodItem, preferProvidedItem: Bool = false) async {
         let cachedListItem = preferProvidedItem ? item : (movieFromCache(matching: item) ?? item)
         selectedMovie = cachedListItem

@@ -3,17 +3,23 @@ import SwiftUI
 import WebKit
 
 struct PlayerPanel: View {
+    let movie: VodItem
+    let source: VideoSource?
     let episode: Episode?
+    let playbackSource: PlaybackSource?
     let playlistEpisodes: [Episode]
     let previousEpisode: Episode?
     let nextEpisode: Episode?
+    let resumeProgress: WatchProgressItem?
     let playPreviousEpisode: () -> Void
     let playNextEpisode: () -> Void
     let didAdvanceToEpisode: (Episode) -> Void
+    let didUpdateWatchProgress: (Episode, TimeInterval, TimeInterval?) -> Void
 
     @StateObject private var queuePlayer = QueuePlaybackController()
     @State private var currentURL: URL?
     @StateObject private var navigationState = PlaybackNavigationState()
+    @State private var progressTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
     private let skipInterval: TimeInterval = 15
 
     var body: some View {
@@ -53,10 +59,12 @@ struct PlayerPanel: View {
         .onAppear {
             syncNavigationState()
             configureQueuePlayer()
+            recordCurrentProgress()
             updatePlayerIfNeeded()
         }
         .onChange(of: episode?.url) { _, _ in
             syncNavigationState()
+            recordCurrentProgress()
             updatePlayerIfNeeded()
         }
         .onChange(of: previousEpisode?.id) { _, _ in
@@ -66,7 +74,11 @@ struct PlayerPanel: View {
             syncNavigationState()
         }
         .onDisappear {
+            recordCurrentProgress()
             queuePlayer.stop()
+        }
+        .onReceive(progressTimer) { _ in
+            recordCurrentProgress()
         }
     }
 
@@ -170,7 +182,38 @@ struct PlayerPanel: View {
             return
         }
 
-        queuePlayer.load(episode: episode, playlistEpisodes: playlistEpisodes)
+        queuePlayer.load(
+            episode: episode,
+            playlistEpisodes: playlistEpisodes,
+            resumePosition: resumePosition(for: episode)
+        )
+    }
+
+    private func recordCurrentProgress() {
+        guard let episode else { return }
+
+        if usesWebPlayer(episode.url) {
+            didUpdateWatchProgress(episode, resumePosition(for: episode), nil)
+            return
+        }
+
+        guard queuePlayer.currentEpisode?.id == episode.id else {
+            didUpdateWatchProgress(episode, resumePosition(for: episode), nil)
+            return
+        }
+
+        let currentSeconds = queuePlayer.currentTimeSeconds
+        didUpdateWatchProgress(episode, currentSeconds, queuePlayer.currentDurationSeconds)
+    }
+
+    private func resumePosition(for episode: Episode) -> TimeInterval {
+        guard let resumeProgress,
+              resumeProgress.episodeURL == episode.url,
+              resumeProgress.positionSeconds.isFinite,
+              resumeProgress.positionSeconds > 5 else {
+            return 0
+        }
+        return resumeProgress.positionSeconds
     }
 
     private func skipBackwardFromPlayer() {
@@ -237,6 +280,8 @@ private func usesWebPlayerURL(_ url: URL) -> Bool {
 private final class QueuePlaybackController: ObservableObject {
     let player = AVQueuePlayer()
 
+    @Published private(set) var currentEpisode: Episode?
+
     var didAdvanceToEpisode: (Episode) -> Void = { _ in }
 
     private let lookaheadCount = 2
@@ -258,7 +303,25 @@ private final class QueuePlaybackController: ObservableObject {
         }
     }
 
-    func load(episode: Episode, playlistEpisodes: [Episode]) {
+    var currentTimeSeconds: TimeInterval {
+        let seconds = player.currentTime().seconds
+        return seconds.isFinite ? seconds : 0
+    }
+
+    var currentDurationSeconds: TimeInterval? {
+        guard let seconds = player.currentItem?.duration.seconds,
+              seconds.isFinite,
+              seconds > 0 else {
+            return nil
+        }
+        return seconds
+    }
+
+    func load(
+        episode: Episode,
+        playlistEpisodes: [Episode],
+        resumePosition: TimeInterval = 0
+    ) {
         let playableEpisodes = playableQueue(from: episode, in: playlistEpisodes)
 
         if currentEpisodeURL == episode.url, !player.items().isEmpty {
@@ -272,6 +335,7 @@ private final class QueuePlaybackController: ObservableObject {
 
         let shouldResume = player.rate > 0 || player.timeControlStatus == .playing
         currentEpisodeURL = episode.url
+        currentEpisode = episode
         queuedEpisodes = playableEpisodes
         itemEpisodes.removeAll()
         loadedEpisodeURLs.removeAll()
@@ -283,6 +347,10 @@ private final class QueuePlaybackController: ObservableObject {
             guard let self else { return }
             await self.appendItems(startingAt: 0, count: self.lookaheadCount, generation: activeGeneration)
 
+            if resumePosition > 5, activeGeneration == self.generation {
+                self.seek(to: resumePosition)
+            }
+
             if shouldResume, activeGeneration == self.generation {
                 self.player.play()
             }
@@ -293,6 +361,7 @@ private final class QueuePlaybackController: ObservableObject {
         generation += 1
         loadTask?.cancel()
         currentEpisodeURL = nil
+        currentEpisode = nil
         queuedEpisodes.removeAll()
         itemEpisodes.removeAll()
         loadedEpisodeURLs.removeAll()
@@ -318,6 +387,13 @@ private final class QueuePlaybackController: ObservableObject {
         player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
+    func seek(to seconds: TimeInterval) {
+        guard seconds.isFinite, seconds > 0 else { return }
+        let timescale = player.currentTime().timescale == 0 ? 600 : player.currentTime().timescale
+        let targetTime = CMTime(seconds: seconds, preferredTimescale: timescale)
+        player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
     private func playableQueue(from episode: Episode, in playlistEpisodes: [Episode]) -> [Episode] {
         let nonWebEpisodes = playlistEpisodes.filter { !usesWebPlayerURL($0.url) }
         guard let selectedIndex = nonWebEpisodes.firstIndex(where: { $0.id == episode.id }) else {
@@ -337,6 +413,7 @@ private final class QueuePlaybackController: ObservableObject {
 
         guard currentEpisodeURL != episode.url else { return }
         currentEpisodeURL = episode.url
+        currentEpisode = episode
         didAdvanceToEpisode(episode)
     }
 

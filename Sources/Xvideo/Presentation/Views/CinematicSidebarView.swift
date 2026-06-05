@@ -3,6 +3,7 @@ import SwiftUI
 struct CinematicSidebarView: View {
     @EnvironmentObject private var library: LibraryViewModel
     @EnvironmentObject private var favorites: FavoritesStore
+    @EnvironmentObject private var watchProgress: WatchProgressStore
 
     @Binding var searchDraft: String
     @Binding var selectedSection: LibrarySection
@@ -67,6 +68,7 @@ struct CinematicSidebarView: View {
             HStack(spacing: 8) {
                 MetricPill(value: "\(library.total)", title: "资源")
                 MetricPill(value: "\(favorites.items.count)", title: "收藏")
+                MetricPill(value: "\(watchProgress.items.count)", title: "追番")
             }
         }
         .padding(.horizontal, 18)
@@ -98,6 +100,16 @@ struct CinematicSidebarView: View {
                 selectedSection = .favorites
                 searchDraft = ""
                 Task { await library.showFavorites(favorites.items) }
+            }
+
+            SidebarNavButton(
+                title: "继续观看",
+                subtitle: watchProgress.items.first?.positionLabel ?? "播放后自动记录",
+                systemImage: "play.circle.fill",
+                isSelected: selectedSection == .continueWatching
+            ) {
+                selectedSection = .continueWatching
+                searchDraft = ""
             }
         }
     }

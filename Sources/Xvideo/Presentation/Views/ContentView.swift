@@ -2,11 +2,13 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var library: LibraryViewModel
+    @EnvironmentObject private var watchProgress: WatchProgressStore
 
     @State private var searchDraft = ""
     @State private var selectedSection: LibrarySection = .home
     @State private var selectedPlaybackSourceID: PlaybackSource.ID?
     @State private var selectedEpisode: Episode?
+    @State private var pendingWatchProgress: WatchProgressItem?
     @State private var route: ContentRoute = .browse
 
     var body: some View {
@@ -27,7 +29,9 @@ struct ContentView: View {
                         selectedSection: $selectedSection,
                         openMovie: openMovie,
                         openFavorite: openFavorite,
+                        openProgress: openProgress,
                         playFavorite: playFavorite,
+                        playProgress: playProgress,
                         playMovie: playMovie
                     )
                     .opacity(route == .browse ? 1 : 0)
@@ -72,10 +76,36 @@ struct ContentView: View {
             return
         }
 
+        if let pendingWatchProgress,
+           pendingWatchProgress.matches(movie, sourceID: library.activeVideoSourceID) {
+            selectPlayback(from: pendingWatchProgress, in: movie)
+            return
+        }
+
+        if let progress = watchProgress.progress(for: movie, sourceID: library.activeVideoSourceID) {
+            selectPlayback(from: progress, in: movie)
+            return
+        }
+
         let sources = SourceParser.parsePlaybackSources(from: movie)
         let preferredSource = sources.first { $0.name.localizedCaseInsensitiveContains("M3U8") } ?? sources.first
         selectedPlaybackSourceID = preferredSource?.id
         selectedEpisode = preferredSource?.episodes.first
+    }
+
+    private func selectPlayback(from progress: WatchProgressItem, in movie: VodItem) {
+        let sources = SourceParser.parsePlaybackSources(from: movie)
+        let source = sources.first { $0.id == progress.playbackSourceID }
+            ?? sources.first { source in
+                source.episodes.contains { $0.url == progress.episodeURL }
+            }
+            ?? sources.first
+        let episode = source?.episodes.first { $0.url == progress.episodeURL }
+            ?? source?.episodes.first
+
+        selectedPlaybackSourceID = source?.id
+        selectedEpisode = episode
+        pendingWatchProgress = nil
     }
 
     private func openMovie(_ movie: VodItem) {
@@ -106,11 +136,26 @@ struct ContentView: View {
             }
         }
     }
+
+    private func openProgress(_ progress: WatchProgressItem) {
+        pendingWatchProgress = progress
+        Task {
+            if await library.selectWatchProgress(progress) {
+                route = .watch
+                selectPlayback(from: progress, in: library.detailMovie ?? library.selectedMovie ?? progress.item)
+            }
+        }
+    }
+
+    private func playProgress(_ progress: WatchProgressItem) {
+        openProgress(progress)
+    }
 }
 
 enum LibrarySection: Hashable {
     case home
     case favorites
+    case continueWatching
     case category(Int)
 }
 

@@ -5,6 +5,7 @@ struct XVideoApp: App {
     @StateObject private var library = AppEnvironment.makeLibraryViewModel()
     @StateObject private var downloads = DownloadManager()
     @StateObject private var favorites = FavoritesStore()
+    @StateObject private var watchProgress = WatchProgressStore()
 
     var body: some Scene {
         WindowGroup {
@@ -12,6 +13,7 @@ struct XVideoApp: App {
                 .environmentObject(library)
                 .environmentObject(downloads)
                 .environmentObject(favorites)
+                .environmentObject(watchProgress)
                 .frame(minWidth: 1280, minHeight: 780)
                 .task {
                     await library.loadInitialData()

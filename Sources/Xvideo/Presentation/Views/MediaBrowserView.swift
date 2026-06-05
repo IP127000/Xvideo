@@ -5,7 +5,9 @@ struct MediaBrowserView: View {
     @Binding var selectedSection: LibrarySection
     let openMovie: (VodItem) -> Void
     let openFavorite: (FavoriteMovie) -> Void
+    let openProgress: (WatchProgressItem) -> Void
     let playFavorite: (FavoriteMovie) -> Void
+    let playProgress: (WatchProgressItem) -> Void
     let playMovie: (VodItem) -> Void
 
     var body: some View {
@@ -13,8 +15,15 @@ struct MediaBrowserView: View {
             switch selectedSection {
             case .favorites:
                 FavoritesBrowserView(openFavorite: openFavorite, playFavorite: playFavorite)
+            case .continueWatching:
+                ContinueWatchingBrowserView(openProgress: openProgress, playProgress: playProgress)
             case .home, .category:
-                MovieListBrowserView(searchDraft: $searchDraft, openMovie: openMovie, playMovie: playMovie)
+                MovieListBrowserView(
+                    searchDraft: $searchDraft,
+                    openMovie: openMovie,
+                    openProgress: openProgress,
+                    playMovie: playMovie
+                )
             }
         }
         .background(CinemaTheme.appBackground)
@@ -24,8 +33,10 @@ struct MediaBrowserView: View {
 private struct MovieListBrowserView: View {
     @EnvironmentObject private var library: LibraryViewModel
     @EnvironmentObject private var favorites: FavoritesStore
+    @EnvironmentObject private var watchProgress: WatchProgressStore
     @Binding var searchDraft: String
     let openMovie: (VodItem) -> Void
+    let openProgress: (WatchProgressItem) -> Void
     let playMovie: (VodItem) -> Void
 
     @State private var isHoveringHeaderMore = false
@@ -59,6 +70,13 @@ private struct MovieListBrowserView: View {
                                     }
                                         .padding(.horizontal, 24)
                                         .padding(.top, 22)
+                                }
+
+                                if !watchProgress.items.isEmpty {
+                                    ContinueWatchingRail(
+                                        items: Array(watchProgress.items.prefix(10)),
+                                        openProgress: openProgress
+                                    )
                                 }
 
                                 MovieRail(
@@ -1351,5 +1369,172 @@ private struct FavoritesBrowserView: View {
                 )
             }
         }
+    }
+}
+
+private struct ContinueWatchingRail: View {
+    let items: [WatchProgressItem]
+    let openProgress: (WatchProgressItem) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("继续观看")
+                    .font(.title2.weight(.black))
+                    .foregroundStyle(CinemaTheme.textPrimary)
+                Text("\(items.count) 部最近播放")
+                    .font(.callout)
+                    .foregroundStyle(CinemaTheme.textTertiary)
+                Spacer()
+            }
+            .padding(.horizontal, 24)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 14) {
+                    ForEach(items) { item in
+                        WatchProgressCard(item: item, width: 252, openProgress: openProgress)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 4)
+            }
+        }
+    }
+}
+
+private struct ContinueWatchingBrowserView: View {
+    @EnvironmentObject private var watchProgress: WatchProgressStore
+
+    let openProgress: (WatchProgressItem) -> Void
+    let playProgress: (WatchProgressItem) -> Void
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 246, maximum: 310), spacing: 16)
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("继续观看", systemImage: "play.circle.fill")
+                            .font(.system(size: 34, weight: .black, design: .rounded))
+                            .foregroundStyle(CinemaTheme.textPrimary)
+
+                        Text(watchProgress.items.isEmpty ? "播放过的剧集会出现在这里" : "\(watchProgress.items.count) 部最近播放")
+                            .font(.callout)
+                            .foregroundStyle(CinemaTheme.textSecondary)
+                    }
+
+                    Spacer()
+                }
+
+                if watchProgress.items.isEmpty {
+                    ContentUnavailableView("暂无观看记录", systemImage: "play.circle", description: Text("开始播放任意剧集后，就能从这里继续。"))
+                        .foregroundStyle(CinemaTheme.textSecondary)
+                        .frame(maxWidth: .infinity, minHeight: 360)
+                } else {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
+                        ForEach(watchProgress.items) { item in
+                            WatchProgressCard(item: item, width: nil) { progress in
+                                playProgress(progress)
+                            }
+                            .contextMenu {
+                                Button("继续播放") {
+                                    openProgress(item)
+                                }
+                                Button("移除记录") {
+                                    watchProgress.remove(item)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(24)
+        }
+        .background {
+            ZStack(alignment: .topTrailing) {
+                CinemaTheme.appBackground
+                RadialGradient(
+                    colors: [CinemaTheme.accent.opacity(0.18), .clear],
+                    center: .topTrailing,
+                    startRadius: 40,
+                    endRadius: 620
+                )
+            }
+        }
+    }
+}
+
+private struct WatchProgressCard: View {
+    let item: WatchProgressItem
+    let width: CGFloat?
+    let openProgress: (WatchProgressItem) -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button {
+            openProgress(item)
+        } label: {
+            HStack(spacing: 12) {
+                PosterView(url: item.item.posterURL, width: 82, height: 116)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 7) {
+                        Image(systemName: "play.fill")
+                            .font(.caption.weight(.bold))
+                        Text("继续")
+                            .font(.caption.weight(.bold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(CinemaTheme.accent, in: Capsule())
+
+                    Text(item.item.vodName)
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(CinemaTheme.textPrimary)
+                        .lineLimit(2)
+
+                    Text(item.positionLabel)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(CinemaTheme.textSecondary)
+                        .lineLimit(1)
+
+                    ProgressView(value: item.progressFraction ?? 0)
+                        .tint(CinemaTheme.accentHot)
+                        .opacity(item.progressFraction == nil ? 0.36 : 1)
+
+                    Text(item.sourceName ?? item.playbackSourceName ?? "本地记录")
+                        .font(.caption)
+                        .foregroundStyle(CinemaTheme.textTertiary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(width: width)
+            .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+            .background(cardBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.white.opacity(isHovering ? 0.18 : 0.08), lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help("继续播放 \(item.item.vodName)")
+        .animation(.easeOut(duration: 0.14), value: isHovering)
+    }
+
+    private var cardBackground: some ShapeStyle {
+        if isHovering {
+            return AnyShapeStyle(CinemaTheme.elevatedBackground)
+        }
+        return AnyShapeStyle(CinemaTheme.panelBackground)
     }
 }
