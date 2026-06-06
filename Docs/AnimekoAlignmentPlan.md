@@ -74,6 +74,8 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 4. App Test
    - UI、播放、下载、数据源相关变更运行 `Scripts/build_app.sh`。
    - 启动 `.build/app/Xvideo.app` 测真实 macOS 工作流。
+   - 真实交互测试优先使用 [@电脑](plugin://computer-use@openai-bundled)，通过应用状态、点击、输入、快捷键等操作验证流程。
+   - 只有电脑插件不可用、无法访问目标窗口或会阻塞测试时，才降级为截图检查或人工说明，并在测试记录里写明原因。
 5. Documentation
    - 用户可见功能变更同步 `README.md` 和 `README.en.md`。
    - 架构或计划变化同步 `Docs/`。
@@ -441,6 +443,23 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 
 ## 测试计划
 
+### 测试执行原则
+
+- UI、播放器、数据源管理、下载、缓存、设置等真实 macOS 工作流尽量使用 [@电脑](plugin://computer-use@openai-bundled) 执行。
+- 每次使用电脑插件测试前，先获取 Xvideo 关键窗口状态，再进行点击、输入、快捷键、菜单或窗口操作。
+- 电脑插件优先覆盖：
+  - 添加和测试数据源。
+  - 搜索、筛选、切换导航。
+  - 打开详情、播放、上一集/下一集、播放窗口。
+  - 继续观看恢复、收藏、下载、缓存页操作。
+  - 设置修改、弹幕开关、缓存清理等交互。
+- 命令行测试主要用于构建、打包、哈希、git 状态和 release 检查；不能替代可交互 UI 流程验收。
+- 截图只作为视觉证据和兜底手段，不能单独证明按钮、输入框、播放控制或设置项真的可用。
+- 如果因为权限、窗口不可见、插件失败或系统弹窗导致无法使用电脑插件，必须在测试记录中写明：
+  - 失败环节。
+  - 降级方式。
+  - 未覆盖的风险。
+
 ### 1. 数据源测试
 
 用例：
@@ -681,6 +700,13 @@ Scripts/build_app.sh
 open .build/app/Xvideo.app
 ```
 
+然后优先使用 [@电脑](plugin://computer-use@openai-bundled) 完成对应页面的真实交互回归。至少记录：
+
+- 电脑插件确认到的当前窗口或关键界面。
+- 实际点击/输入/快捷键覆盖的核心路径。
+- 是否出现布局遮挡、无响应、错误弹窗或播放失败。
+- 如未使用电脑插件，说明降级原因。
+
 发布前执行：
 
 ```bash
@@ -708,6 +734,7 @@ shasum -a 256 .build/releases/Xvideo-YYYY-MM-DD-macOS.zip
    - `swift build` 通过。
    - `Scripts/build_app.sh` 通过。
    - 真实启动 `.build/app/Xvideo.app` 通过。
+   - 涉及 UI/播放/设置/下载/缓存的阶段，已优先使用 [@电脑](plugin://computer-use@openai-bundled) 完成交互验收，或记录了不能使用的具体原因。
    - README 更新。
    - release notes 格式正确。
    - GitHub release 资产和 SHA-256 正确。
@@ -719,6 +746,7 @@ shasum -a 256 .build/releases/Xvideo-YYYY-MM-DD-macOS.zip
 - 已提交代码。
 - 已推送远端。
 - 已记录测试结果。
+- 测试结果说明电脑插件覆盖了哪些真实交互，或说明未使用电脑插件的原因。
 - 如涉及 App 行为，已发布同日 release。
 - final response 中说明：
   - 完成了什么。
@@ -726,4 +754,3 @@ shasum -a 256 .build/releases/Xvideo-YYYY-MM-DD-macOS.zip
   - README 是否更新。
   - release 是否更新。
   - 工作树状态。
-
