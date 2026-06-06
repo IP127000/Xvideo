@@ -63,44 +63,59 @@ private struct MovieListBrowserView: View {
                     ZStack(alignment: .topLeading) {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 28) {
-                                if let spotlightMovie {
-                                    SpotlightHero(movie: spotlightMovie) {
-                                        playMovie(spotlightMovie)
-                                    }
-                                        .padding(.horizontal, 24)
-                                        .padding(.top, 22)
-                                }
-
-                                if !watchProgress.items.isEmpty {
-                                    ContinueWatchingRail(
-                                        items: Array(watchProgress.items.prefix(10)),
-                                        openProgress: openProgress
+                                if library.isShowingSearchResults {
+                                    SearchResultsGrid(
+                                        movies: library.movies,
+                                        paginationAnchor: library.movies.last,
+                                        isLoading: library.isLoadingList,
+                                        selectedMovieID: library.selectedMovie?.id,
+                                        openMovie: openMovie,
+                                        showDetailPreview: showCardDetailPreview,
+                                        clearDetailPreview: clearCardDetailPreview,
+                                        playMovie: playMovieFromCard
                                     )
+                                    .padding(.horizontal, 24)
+                                    .padding(.top, 22)
+                                } else {
+                                    if let spotlightMovie {
+                                        SpotlightHero(movie: spotlightMovie) {
+                                            playMovie(spotlightMovie)
+                                        }
+                                            .padding(.horizontal, 24)
+                                            .padding(.top, 22)
+                                    }
+
+                                    if !watchProgress.items.isEmpty {
+                                        ContinueWatchingRail(
+                                            items: Array(watchProgress.items.prefix(10)),
+                                            openProgress: openProgress
+                                        )
+                                    }
+
+                                    MovieRail(
+                                        title: railTitle,
+                                        subtitle: "\(railMovies.count) 部正在展示",
+                                        movies: railMovies,
+                                        selectedMovieID: library.selectedMovie?.id,
+                                        canShuffle: featuredCandidates.count > featuredMovieLimit,
+                                        shuffleMovies: showNextFeaturedBatch,
+                                        openMovie: openMovie,
+                                        showDetailPreview: showCardDetailPreview,
+                                        playMovie: playMovieFromCard
+                                    )
+
+                                    MoviePosterGrid(
+                                        movies: gridMovies,
+                                        paginationAnchor: library.movies.last,
+                                        isLoading: library.isLoadingList,
+                                        selectedMovieID: library.selectedMovie?.id,
+                                        openMovie: openMovie,
+                                        showDetailPreview: showCardDetailPreview,
+                                        clearDetailPreview: clearCardDetailPreview,
+                                        playMovie: playMovieFromCard
+                                    )
+                                    .padding(.horizontal, 24)
                                 }
-
-                                MovieRail(
-                                    title: railTitle,
-                                    subtitle: "\(railMovies.count) 部正在展示",
-                                    movies: railMovies,
-                                    selectedMovieID: library.selectedMovie?.id,
-                                    canShuffle: featuredCandidates.count > featuredMovieLimit,
-                                    shuffleMovies: showNextFeaturedBatch,
-                                    openMovie: openMovie,
-                                    showDetailPreview: showCardDetailPreview,
-                                    playMovie: playMovieFromCard
-                                )
-
-                                MoviePosterGrid(
-                                    movies: gridMovies,
-                                    paginationAnchor: library.movies.last,
-                                    isLoading: library.isLoadingList,
-                                    selectedMovieID: library.selectedMovie?.id,
-                                    openMovie: openMovie,
-                                    showDetailPreview: showCardDetailPreview,
-                                    clearDetailPreview: clearCardDetailPreview,
-                                    playMovie: playMovieFromCard
-                                )
-                                .padding(.horizontal, 24)
 
                                 if library.isLoadingList {
                                     ProgressView()
@@ -404,6 +419,9 @@ private struct MovieListBrowserView: View {
     }
 
     private var headerSubtitle: String {
+        if library.isShowingSearchResults {
+            return "\(library.total) 条匹配结果"
+        }
         if shouldShowFilterPanel {
             return filterSummary
         }
@@ -999,6 +1017,58 @@ private struct MoviePosterGrid: View {
     private func clampBatchIndex() {
         if batchIndex >= batchCount {
             batchIndex = 0
+        }
+    }
+}
+
+private struct SearchResultsGrid: View {
+    @EnvironmentObject private var library: LibraryViewModel
+
+    let movies: [VodItem]
+    let paginationAnchor: VodItem?
+    let isLoading: Bool
+    let selectedMovieID: VodItem.ID?
+    let openMovie: (VodItem) -> Void
+    let showDetailPreview: (VodItem, CGRect) -> Void
+    let clearDetailPreview: () -> Void
+    let playMovie: (VodItem) -> Void
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 16)
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
+            ForEach(movies) { movie in
+                MoviePosterCard(
+                    movie: movie,
+                    isSelected: selectedMovieID == movie.id,
+                    width: nil,
+                    posterHeight: 228,
+                    openMovie: openMovie,
+                    showDetailPreview: showDetailPreview,
+                    playMovie: playMovie
+                )
+                .task {
+                    await library.loadNextPageIfNeeded(current: movie)
+                }
+            }
+        }
+        .onDisappear(perform: clearDetailPreview)
+        .task(id: paginationAnchor?.id) {
+            if let paginationAnchor {
+                await library.loadNextPageIfNeeded(current: paginationAnchor)
+            }
+        }
+        .overlay {
+            if movies.isEmpty && !isLoading {
+                ContentUnavailableView(
+                    "暂无结果",
+                    systemImage: "magnifyingglass",
+                    description: Text("换个关键词试试。")
+                )
+                .foregroundStyle(CinemaTheme.textSecondary)
+            }
         }
     }
 }

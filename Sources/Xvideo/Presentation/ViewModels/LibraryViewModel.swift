@@ -118,6 +118,10 @@ final class LibraryViewModel: ObservableObject {
         contentMode == .preview
     }
 
+    var isShowingSearchResults: Bool {
+        contentMode == .search || !normalizedSearchText.isEmpty
+    }
+
     var canRequestMoreForCurrentSelection: Bool {
         normalizedSearchText.isEmpty
     }
