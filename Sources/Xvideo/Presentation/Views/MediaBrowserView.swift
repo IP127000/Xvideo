@@ -41,7 +41,6 @@ private struct MovieListBrowserView: View {
 
     @State private var isHoveringHeaderMore = false
     @State private var isFilterPanelManuallyOpened = false
-    @State private var isAllMoviesSectionActive = false
     @State private var featuredBatchIndex = 0
     @State private var cardDetailPreview: MovieCardDetailPreview?
     @State private var lastScrollContentY: CGFloat?
@@ -116,10 +115,6 @@ private struct MovieListBrowserView: View {
                             }
                         }
                         .coordinateSpace(name: "movieBrowserScroll")
-                        .onPreferenceChange(AllMoviesSectionYPreferenceKey.self) { sectionY in
-                            guard let sectionY else { return }
-                            isAllMoviesSectionActive = sectionY < 180
-                        }
                         .onPreferenceChange(MovieBrowserScrollYPreferenceKey.self, perform: handleScrollContentYChange)
 
                         if let cardDetailPreview {
@@ -147,7 +142,10 @@ private struct MovieListBrowserView: View {
         }
         .overlay(alignment: .topLeading) {
             if shouldShowFilterPanel {
-                FilterSearchPanel()
+                FilterSearchPanel(
+                    searchDraft: $searchDraft,
+                    closePanel: { isFilterPanelManuallyOpened = false }
+                )
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 24)
                     .padding(.top, headerHeight + 10)
@@ -233,8 +231,6 @@ private struct MovieListBrowserView: View {
                 }
             }
 
-            SearchField(searchDraft: $searchDraft)
-
             if !library.childCategories.isEmpty {
                 ChildCategoryStrip(searchDraft: $searchDraft)
             }
@@ -295,7 +291,7 @@ private struct MovieListBrowserView: View {
     }
 
     private var shouldShowFilterPanel: Bool {
-        library.isShowingFilterSearch && (isFilterPanelManuallyOpened || isAllMoviesSectionActive)
+        library.isShowingFilterSearch && isFilterPanelManuallyOpened
     }
 
     private var railTitle: String {
@@ -596,9 +592,35 @@ private struct ChildCategoryControl: View {
 
 private struct FilterSearchPanel: View {
     @EnvironmentObject private var library: LibraryViewModel
+    @Binding var searchDraft: String
+    let closePanel: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Label("筛选搜索", systemImage: "line.3.horizontal.decrease.circle")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(CinemaTheme.textPrimary)
+
+                Spacer()
+
+                Button(action: closePanel) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(CinemaTheme.textSecondary)
+                .background(CinemaTheme.softBackground, in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(CinemaTheme.separator, lineWidth: 1)
+                }
+                .help("关闭筛选搜索")
+            }
+
+            SearchField(searchDraft: $searchDraft)
+
             filterRow(title: "类型") {
                 ForEach(library.filterCategories) { category in
                     filterButton(
@@ -900,14 +922,6 @@ private struct MoviePosterGrid: View {
                 .disabled(!canShuffle)
                 .help(canShuffle ? "换一批全部影片" : "暂无更多全部影片")
             }
-                .background {
-                    GeometryReader { proxy in
-                        Color.clear.preference(
-                            key: AllMoviesSectionYPreferenceKey.self,
-                            value: proxy.frame(in: .named("movieBrowserScroll")).minY
-                        )
-                    }
-                }
 
             if movies.isEmpty {
                 AllMoviesLoadingHint(isLoading: isLoading)
@@ -1016,14 +1030,6 @@ private struct AllMoviesLoadingHint: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(CinemaTheme.separator, lineWidth: 1)
         }
-    }
-}
-
-private struct AllMoviesSectionYPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat? = nil
-
-    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
-        value = nextValue() ?? value
     }
 }
 
