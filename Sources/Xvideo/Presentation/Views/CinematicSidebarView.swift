@@ -4,6 +4,7 @@ struct CinematicSidebarView: View {
     @EnvironmentObject private var library: LibraryViewModel
     @EnvironmentObject private var favorites: FavoritesStore
     @EnvironmentObject private var watchProgress: WatchProgressStore
+    @EnvironmentObject private var downloads: DownloadManager
 
     @Binding var searchDraft: String
     @Binding var selectedSection: LibrarySection
@@ -17,7 +18,6 @@ struct CinematicSidebarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     navigationSection
-                    categorySection
                 }
                 .padding(.horizontal, 14)
                 .padding(.bottom, 18)
@@ -59,7 +59,7 @@ struct CinematicSidebarView: View {
                     Text("Xvideo")
                         .font(.system(size: 24, weight: .black, design: .rounded))
                         .foregroundStyle(CinemaTheme.textPrimary)
-                    Text("私人媒体库")
+                    Text("找番 · 追番 · 看番")
                         .font(.caption)
                         .foregroundStyle(CinemaTheme.textSecondary)
                 }
@@ -81,14 +81,44 @@ struct CinematicSidebarView: View {
             SidebarSectionTitle("媒体库")
 
             SidebarNavButton(
-                title: "最新更新",
-                subtitle: library.isRefreshingPreviewCache ? "正在更新本地缓存" : "本地预览优先",
-                systemImage: "sparkles",
+                title: "首页",
+                subtitle: library.isRefreshingPreviewCache ? "正在更新本地缓存" : "继续观看和最近更新",
+                systemImage: "house.fill",
                 isSelected: selectedSection == .home
             ) {
                 selectedSection = .home
                 searchDraft = ""
                 Task { await library.selectCategory(nil) }
+            }
+
+            SidebarNavButton(
+                title: "找番",
+                subtitle: library.discoveryIndex.tags.isEmpty ? "搜索和标签筛选" : "\(library.discoveryIndex.tags.count) 个标签",
+                systemImage: "magnifyingglass.circle.fill",
+                isSelected: selectedSection == .discovery
+            ) {
+                selectedSection = .discovery
+                searchDraft = ""
+            }
+
+            SidebarNavButton(
+                title: "时间表",
+                subtitle: library.discoveryIndex.scheduleDays.first?.title ?? "按更新日期查看",
+                systemImage: "calendar",
+                isSelected: selectedSection == .schedule
+            ) {
+                selectedSection = .schedule
+                searchDraft = ""
+            }
+
+            SidebarNavButton(
+                title: "继续观看",
+                subtitle: watchProgress.items.first?.positionLabel ?? "播放后自动记录",
+                systemImage: "play.circle.fill",
+                isSelected: selectedSection == .continueWatching
+            ) {
+                selectedSection = .continueWatching
+                searchDraft = ""
             }
 
             SidebarNavButton(
@@ -103,35 +133,23 @@ struct CinematicSidebarView: View {
             }
 
             SidebarNavButton(
-                title: "继续观看",
-                subtitle: watchProgress.items.first?.positionLabel ?? "播放后自动记录",
-                systemImage: "play.circle.fill",
-                isSelected: selectedSection == .continueWatching
+                title: "离线缓存",
+                subtitle: downloads.tasks.isEmpty ? "管理下载任务" : "\(downloads.tasks.count) 个任务",
+                systemImage: "arrow.down.circle.fill",
+                isSelected: selectedSection == .offlineCache
             ) {
-                selectedSection = .continueWatching
+                selectedSection = .offlineCache
                 searchDraft = ""
             }
-        }
-    }
 
-    private var categorySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SidebarSectionTitle("分类")
-
-            ForEach(library.rootCategories) { category in
-                CategorySidebarRow(
-                    category: category,
-                    isSelected: selectedSection == .category(category.id),
-                    systemImage: iconName(for: category.typeName)
-                ) {
-                    selectedSection = .category(category.id)
-                    searchDraft = ""
-                    Task { await library.selectCategory(category) }
-                } openFilter: {
-                    selectedSection = .category(category.id)
-                    searchDraft = ""
-                    Task { await library.openFilterSearch(for: category) }
-                }
+            SidebarNavButton(
+                title: "设置",
+                subtitle: "数据源、播放器、弹幕",
+                systemImage: "gearshape.fill",
+                isSelected: selectedSection == .settings
+            ) {
+                selectedSection = .settings
+                searchDraft = ""
             }
         }
     }
@@ -191,7 +209,10 @@ struct CinematicSidebarView: View {
         guard let source = library.activeVideoSource else {
             return "添加自己的接口"
         }
-        return "\(source.format.title) 数据源"
+        if let health = library.activeSourceHealth {
+            return health.isHealthy ? "\(source.format.title) · \(health.itemCount) 条" : "连接失败"
+        }
+        return "\(source.format.title) 数据源 · 待测试"
     }
 
     private var sourceSettingsBackground: some ShapeStyle {
@@ -209,14 +230,6 @@ struct CinematicSidebarView: View {
         isHoveringSourceSettings ? CinemaTheme.accent.opacity(0.55) : CinemaTheme.separator
     }
 
-    private func iconName(for name: String) -> String {
-        if name.contains("电影") { return "film" }
-        if name.contains("连续") || name.contains("短剧") { return "tv" }
-        if name.contains("动漫") { return "sparkles.tv" }
-        if name.contains("综艺") { return "person.2.wave.2" }
-        if name.contains("体育") { return "sportscourt" }
-        return "rectangle.stack"
-    }
 }
 
 private struct SidebarSectionTitle: View {

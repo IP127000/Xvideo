@@ -47,6 +47,24 @@ struct VideoSource: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+struct VideoSourceHealth: Hashable {
+    let testedAt: Date
+    let categoryCount: Int
+    let itemCount: Int
+    let errorMessage: String?
+
+    var isHealthy: Bool {
+        errorMessage == nil
+    }
+
+    var summary: String {
+        if let errorMessage {
+            return "连接失败：\(errorMessage)"
+        }
+        return "连接正常：\(categoryCount) 个分类，\(itemCount) 条影片"
+    }
+}
+
 enum VideoSourceValidationError: LocalizedError {
     case emptyName
     case invalidHomepageURL

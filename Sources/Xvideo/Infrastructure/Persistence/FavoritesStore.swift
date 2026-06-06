@@ -65,6 +65,16 @@ final class FavoritesStore: ObservableObject {
         save()
     }
 
+    func replace(with newItems: [FavoriteMovie]) {
+        items = newItems
+        save()
+    }
+
+    func removeAll() {
+        items = []
+        save()
+    }
+
     private func load() {
         guard let data = try? Data(contentsOf: fileURL) else { return }
         items = (try? decoder.decode([FavoriteMovie].self, from: data)) ?? []

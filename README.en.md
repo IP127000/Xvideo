@@ -2,30 +2,32 @@
 
 [中文](README.md) | [English](README.en.md)
 
-Xvideo is a native macOS video client built with SwiftUI. It fetches video lists, details, and playback sources from user-configured media APIs, then presents them in a desktop-style browsing and playback experience.
+Xvideo is a native macOS anime-tracking and video client built with SwiftUI. It fetches video lists, details, and playback sources from user-configured media APIs, then presents them in a desktop-style browsing and playback experience.
 
-The project is focused on everyday watching: browsing categories, searching titles, reading details, switching episodes, tracking local watch progress, saving favorites, and playing videos inside the app.
+The project is focused on an Animeko-like find, track, and watch flow: browse updates, search by tags, review a local schedule, switch episodes, track local progress, manage offline cache tasks, and tune playback settings.
 
 ## Preview
 
-The main window now uses a two-column cinematic layout: media library, categories, and source management on the left; the upper-right area shows the selected title details, with featured picks and the full catalog below. Clicking a title card opens quick details and refreshes the upper detail panel; double-click a card or choose Start Playback to enter the dedicated player page.
+The main window now uses Animeko-style tracking navigation: Home, Discover, Schedule, Continue Watching, Favorites, Offline Cache, and Settings on the left, with update feeds, tag filters, schedules, cache management, or playback details on the right.
 
 ![Xvideo macOS app preview](Docs/images/app-preview-blurred.png)
 
 ## Features
 
-- Browse latest updates and video categories
-- Use a two-column cinematic interface with an inline detail panel and a separate playback page
-- Prioritize favorites in Featured Picks, and browse the full catalog in two-row shuffle batches
-- Search by title, actor, or keyword
+- Use Animeko-style navigation for Home, Discover, Schedule, Continue Watching, Favorites, Offline Cache, and Settings
+- Show Continue Watching, today/weekly updates, recent updates, tags, and category entry points on Home
+- Discover by title, actor, director, tag, year, region, language, and category
+- Build a local schedule from source update timestamps, with graceful fallback when exact broadcast data is unavailable
 - View poster, summary, region, year, cast, director, and update status
 - Ships with no built-in data source; add your own collection API before browsing
-- Switch between multiple data and playback sources, including JSON, XML, and flat XML category APIs
-- Jump to the previous or next episode from the player
-- Rewind or fast-forward 15 seconds, and close the playback window with Esc
+- Switch between multiple data and playback sources, including JSON, XML, and flat XML category APIs, with visible source health
+- Use source cards, episode state, last-watched markers, and next-episode suggestions on the detail page
+- Jump to the previous or next episode, configure seek intervals, and close the playback window with Esc
+- Toggle a basic danmaku overlay, import local danmaku text, and cache the current episode from the player
 - Track local watch progress while episodes play, then resume the last episode and playback time from Continue Watching
 - Favorite videos with their source attached, then click or double-click them in My Favorites to continue watching
-- Download available mp4 resources to `~/Downloads/Xvideo`
+- Manage direct-link offline cache tasks with pause, cancel, retry, delete, and Finder reveal actions
+- Configure data sources, playback, danmaku, cache, appearance, and local data import/export in Settings
 
 ## Run
 

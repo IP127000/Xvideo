@@ -207,6 +207,12 @@ struct SourceManagerView: View {
                     .font(.caption)
                     .foregroundStyle(CinemaTheme.textTertiary)
                     .lineLimit(1)
+                if let health = library.sourceHealth[source.id] {
+                    Text(sourceHealthText(health))
+                        .font(.caption2)
+                        .foregroundStyle(health.isHealthy ? CinemaTheme.teal : CinemaTheme.gold)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
@@ -286,5 +292,11 @@ struct SourceManagerView: View {
             statusIsError = true
             statusText = error.localizedDescription
         }
+    }
+
+    private func sourceHealthText(_ health: VideoSourceHealth) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return "\(health.summary) · \(formatter.string(from: health.testedAt))"
     }
 }

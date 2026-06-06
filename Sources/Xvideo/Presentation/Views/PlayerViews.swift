@@ -3,6 +3,9 @@ import SwiftUI
 import WebKit
 
 struct PlayerPanel: View {
+    @EnvironmentObject private var downloads: DownloadManager
+    @EnvironmentObject private var preferences: UserPreferencesStore
+
     let movie: VodItem
     let source: VideoSource?
     let episode: Episode?
@@ -20,7 +23,6 @@ struct PlayerPanel: View {
     @State private var currentURL: URL?
     @StateObject private var navigationState = PlaybackNavigationState()
     @State private var progressTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
-    private let skipInterval: TimeInterval = 15
 
     var body: some View {
         ZStack {
@@ -41,6 +43,9 @@ struct PlayerPanel: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(playerTopBar(episode: episode), alignment: .top)
+                .overlay {
+                    DanmakuOverlayView(preferences: preferences.danmaku)
+                }
             } else {
                 VStack(spacing: 10) {
                     Image(systemName: "play.rectangle")
@@ -127,6 +132,32 @@ struct PlayerPanel: View {
                 .instantTooltip(nextEpisode.map { "下一集：\($0.title)" } ?? "没有下一集")
 
                 Button {
+                    preferences.danmaku.isEnabled.toggle()
+                } label: {
+                    Image(systemName: preferences.danmaku.isEnabled ? "text.bubble.fill" : "text.bubble")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 34, height: 34)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("切换弹幕")
+                .help(preferences.danmaku.isEnabled ? "关闭弹幕" : "开启弹幕")
+                .instantTooltip(preferences.danmaku.isEnabled ? "关闭弹幕" : "开启弹幕")
+
+                Button {
+                    downloads.download(episode, movieName: movie.vodName)
+                } label: {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 34, height: 34)
+                        .contentShape(Rectangle())
+                }
+                .disabled(!downloads.canCache(episode.url))
+                .opacity(downloads.canCache(episode.url) ? 1 : 0.45)
+                .accessibilityLabel("缓存当前剧集")
+                .help(downloads.canCache(episode.url) ? "缓存当前剧集" : "当前仅支持直链资源缓存")
+                .instantTooltip(downloads.canCache(episode.url) ? "缓存当前剧集" : "仅支持直链缓存")
+
+                Button {
                     syncNavigationState()
                     if usesWebPlayer(episode.url) {
                         FullscreenWebPlayerWindow.show(navigationState: navigationState)
@@ -159,6 +190,7 @@ struct PlayerPanel: View {
         navigationState.playNextEpisode = playNextEpisode
         navigationState.skipBackward = skipBackwardFromPlayer
         navigationState.skipForward = skipForwardFromPlayer
+        navigationState.danmakuPreferences = preferences.danmaku
     }
 
     private func configureQueuePlayer() {
@@ -184,7 +216,7 @@ struct PlayerPanel: View {
 
         queuePlayer.load(
             episode: episode,
-            playlistEpisodes: playlistEpisodes,
+            playlistEpisodes: preferences.player.autoplayNextEpisode ? playlistEpisodes : [episode],
             resumePosition: resumePosition(for: episode)
         )
     }
@@ -217,11 +249,11 @@ struct PlayerPanel: View {
     }
 
     private func skipBackwardFromPlayer() {
-        skipPlayback(by: -skipInterval)
+        skipPlayback(by: -preferences.player.skipIntervalSeconds)
     }
 
     private func skipForwardFromPlayer() {
-        skipPlayback(by: skipInterval)
+        skipPlayback(by: preferences.player.skipIntervalSeconds)
     }
 
     private func skipPlayback(by seconds: TimeInterval) {
@@ -567,9 +599,9 @@ private final class SeekAwarePlayerView: AVPlayerView {
 
         switch nativeTransportControl(at: point) {
         case .rewind:
-            showInstantTooltip("后退15秒", near: point)
+            showInstantTooltip("快退", near: point)
         case .fastForward:
-            showInstantTooltip("前进15秒", near: point)
+            showInstantTooltip("快进", near: point)
         case nil:
             hideInstantTooltip()
         }
@@ -666,12 +698,12 @@ private final class SeekAwarePlayerView: AVPlayerView {
 
             let label = controlLabel(for: subview)
             if label.contains("rewind") {
-                subview.toolTip = "后退15秒"
-                subview.setAccessibilityHelp("后退15秒")
+                subview.toolTip = "快退"
+                subview.setAccessibilityHelp("快退")
                 (subview as? NSControl)?.isEnabled = true
             } else if label.contains("fast forward") {
-                subview.toolTip = "前进15秒"
-                subview.setAccessibilityHelp("前进15秒")
+                subview.toolTip = "快进"
+                subview.setAccessibilityHelp("快进")
                 (subview as? NSControl)?.isEnabled = true
             }
             configureNativeTransportControls(in: subview)
@@ -787,6 +819,7 @@ private final class PlaybackNavigationState: ObservableObject {
     @Published var playlistEpisodes: [Episode] = []
     @Published var previousEpisode: Episode?
     @Published var nextEpisode: Episode?
+    @Published var danmakuPreferences = DanmakuPreferences()
 
     var playPreviousEpisode: () -> Void = {}
     var playNextEpisode: () -> Void = {}
@@ -809,6 +842,9 @@ private struct FullscreenVideoPlayerContent: View {
                 skipForward: navigationState.skipForward
             )
                 .ignoresSafeArea()
+                .overlay {
+                    DanmakuOverlayView(preferences: navigationState.danmakuPreferences)
+                }
 
             FullscreenPlaybackBar(navigationState: navigationState)
         }
@@ -826,6 +862,9 @@ private struct FullscreenWebPlayerContent: View {
             if let url = navigationState.currentEpisode?.url {
                 MacWebVideoPlayer(url: url)
                     .ignoresSafeArea()
+                    .overlay {
+                        DanmakuOverlayView(preferences: navigationState.danmakuPreferences)
+                    }
             }
 
             FullscreenPlaybackBar(navigationState: navigationState)

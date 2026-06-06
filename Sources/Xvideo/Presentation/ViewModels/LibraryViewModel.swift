@@ -20,6 +20,7 @@ final class LibraryViewModel: ObservableObject {
     @Published var filterArea = ""
     @Published private(set) var videoSources: [VideoSource]
     @Published private(set) var activeVideoSourceID: VideoSource.ID?
+    @Published private(set) var sourceHealth: [VideoSource.ID: VideoSourceHealth] = [:]
     @Published var isSwitchingVideoSource = false
     @Published private var posterFileURLs: [URL: URL] = [:]
 
@@ -158,6 +159,15 @@ final class LibraryViewModel: ObservableObject {
         activeVideoSource != nil
     }
 
+    var discoveryIndex: DiscoveryIndex {
+        DiscoveryIndex(items: movies, categories: categories)
+    }
+
+    var activeSourceHealth: VideoSourceHealth? {
+        guard let activeVideoSourceID else { return nil }
+        return sourceHealth[activeVideoSourceID]
+    }
+
     func cachedPosterFileURL(for url: URL?) -> URL? {
         guard let url else { return nil }
         return posterFileURLs[url]
@@ -190,6 +200,7 @@ final class LibraryViewModel: ObservableObject {
         }
 
         let result = try await repository.testSource(source)
+        recordSourceHealth(source.id, result: result)
         videoSources.append(source)
         activeVideoSourceID = source.id
         repository.updateSource(source)
@@ -213,8 +224,10 @@ final class LibraryViewModel: ObservableObject {
         errorMessage = nil
 
         do {
-            _ = try await repository.testSource(storedSource)
+            let result = try await repository.testSource(storedSource)
+            recordSourceHealth(storedSource.id, result: result)
         } catch {
+            recordSourceHealth(storedSource.id, error: error)
             isSwitchingVideoSource = false
             errorMessage = "无法启用该视频源：\(error.localizedDescription)"
             return false
@@ -259,7 +272,19 @@ final class LibraryViewModel: ObservableObject {
             apiURLString: apiURLString,
             format: format
         )
-        return try await repository.testSource(source)
+        let result = try await repository.testSource(source)
+        recordSourceHealth(source.id, result: result)
+        return result
+    }
+
+    func replaceVideoSources(_ sources: [VideoSource], activeSourceID: VideoSource.ID?) async {
+        videoSources = sources
+        self.activeVideoSourceID = activeSourceID.flatMap { activeID in
+            sources.contains { $0.id == activeID } ? activeID : nil
+        } ?? sources.first?.id
+        repository.updateSource(activeVideoSource)
+        persistVideoSources()
+        await reloadForActiveSource()
     }
 
     func loadInitialData(force: Bool = false) async {
@@ -637,6 +662,24 @@ final class LibraryViewModel: ObservableObject {
         previewCache = [:]
         onlinePageCache = [:]
         isRebuildingPreviewCache = false
+    }
+
+    private func recordSourceHealth(_ sourceID: VideoSource.ID, result: SourceTestResult) {
+        sourceHealth[sourceID] = VideoSourceHealth(
+            testedAt: Date(),
+            categoryCount: result.categoryCount,
+            itemCount: result.itemCount,
+            errorMessage: nil
+        )
+    }
+
+    private func recordSourceHealth(_ sourceID: VideoSource.ID, error: Error) {
+        sourceHealth[sourceID] = VideoSourceHealth(
+            testedAt: Date(),
+            categoryCount: 0,
+            itemCount: 0,
+            errorMessage: error.localizedDescription
+        )
     }
 
     private func invalidateSourceScopedWork() {

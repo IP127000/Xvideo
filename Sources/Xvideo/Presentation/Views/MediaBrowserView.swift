@@ -9,20 +9,38 @@ struct MediaBrowserView: View {
     let playFavorite: (FavoriteMovie) -> Void
     let playProgress: (WatchProgressItem) -> Void
     let playMovie: (VodItem) -> Void
+    let openCategory: (VodCategory) -> Void
 
     var body: some View {
         Group {
             switch selectedSection {
-            case .favorites:
-                FavoritesBrowserView(openFavorite: openFavorite, playFavorite: playFavorite)
-            case .continueWatching:
-                ContinueWatchingBrowserView(openProgress: openProgress, playProgress: playProgress)
-            case .home, .category:
+            case .home:
                 MovieListBrowserView(
                     searchDraft: $searchDraft,
                     openMovie: openMovie,
                     openProgress: openProgress,
-                    playMovie: playMovie
+                    playMovie: playMovie,
+                    openCategory: openCategory
+                )
+            case .discovery:
+                DiscoveryBrowserView(searchDraft: $searchDraft, openMovie: openMovie, playMovie: playMovie)
+            case .schedule:
+                ScheduleBrowserView(openMovie: openMovie, playMovie: playMovie)
+            case .offlineCache:
+                OfflineCacheView()
+            case .settings:
+                SettingsBrowserView()
+            case .favorites:
+                FavoritesBrowserView(openFavorite: openFavorite, playFavorite: playFavorite)
+            case .continueWatching:
+                ContinueWatchingBrowserView(openProgress: openProgress, playProgress: playProgress)
+            case .category:
+                MovieListBrowserView(
+                    searchDraft: $searchDraft,
+                    openMovie: openMovie,
+                    openProgress: openProgress,
+                    playMovie: playMovie,
+                    openCategory: openCategory
                 )
             }
         }
@@ -38,6 +56,7 @@ private struct MovieListBrowserView: View {
     let openMovie: (VodItem) -> Void
     let openProgress: (WatchProgressItem) -> Void
     let playMovie: (VodItem) -> Void
+    let openCategory: (VodCategory) -> Void
 
     @State private var isHoveringHeaderMore = false
     @State private var isFilterPanelManuallyOpened = false
@@ -78,6 +97,12 @@ private struct MovieListBrowserView: View {
                                         openProgress: openProgress
                                     )
                                 }
+
+                                HomeAnimekoSections(
+                                    openMovie: openMovie,
+                                    playMovie: playMovie,
+                                    openCategory: openCategory
+                                )
 
                                 MovieRail(
                                     title: railTitle,

@@ -93,7 +93,7 @@ struct DownloadShelfView: View {
                 ForEach(downloads.tasks.prefix(3)) { task in
                     VStack(alignment: .leading, spacing: 5) {
                         HStack {
-                            Text(task.title)
+                            Text("\(task.movieName) \(task.title)")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(CinemaTheme.textPrimary)
                                 .lineLimit(1)

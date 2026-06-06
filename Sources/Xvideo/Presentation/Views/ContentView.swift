@@ -32,7 +32,8 @@ struct ContentView: View {
                         openProgress: openProgress,
                         playFavorite: playFavorite,
                         playProgress: playProgress,
-                        playMovie: playMovie
+                        playMovie: playMovie,
+                        openCategory: openCategory
                     )
                     .opacity(route == .browse ? 1 : 0)
                     .allowsHitTesting(route == .browse)
@@ -111,6 +112,7 @@ struct ContentView: View {
     private func openMovie(_ movie: VodItem) {
         Task {
             await library.selectMovie(movie)
+            route = .watch
         }
     }
 
@@ -150,10 +152,20 @@ struct ContentView: View {
     private func playProgress(_ progress: WatchProgressItem) {
         openProgress(progress)
     }
+
+    private func openCategory(_ category: VodCategory) {
+        selectedSection = .discovery
+        searchDraft = ""
+        Task { await library.openFilterSearch(for: category) }
+    }
 }
 
 enum LibrarySection: Hashable {
     case home
+    case discovery
+    case schedule
+    case offlineCache
+    case settings
     case favorites
     case continueWatching
     case category(Int)

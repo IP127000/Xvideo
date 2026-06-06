@@ -121,6 +121,16 @@ final class WatchProgressStore: ObservableObject {
         save()
     }
 
+    func replace(with newItems: [WatchProgressItem]) {
+        items = Array(newItems.prefix(maximumItemCount))
+        save()
+    }
+
+    func removeAll() {
+        items = []
+        save()
+    }
+
     private func normalizedPosition(_ positionSeconds: Double, durationSeconds: Double?) -> Double {
         guard positionSeconds.isFinite, positionSeconds > 0 else { return 0 }
 

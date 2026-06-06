@@ -50,6 +50,10 @@ struct MovieDetailView: View {
         return episodes[currentIndex + 1]
     }
 
+    private var currentWatchProgress: WatchProgressItem? {
+        watchProgress.progress(for: movie, sourceID: library.activeVideoSourceID)
+    }
+
     var body: some View {
         Group {
             if let movie {
@@ -69,7 +73,7 @@ struct MovieDetailView: View {
                             playlistEpisodes: selectedSource?.episodes ?? [],
                             previousEpisode: previousEpisode,
                             nextEpisode: nextEpisode,
-                            resumeProgress: watchProgress.progress(for: movie, sourceID: library.activeVideoSourceID),
+                            resumeProgress: currentWatchProgress,
                             playPreviousEpisode: playPreviousEpisode,
                             playNextEpisode: playNextEpisode,
                             didAdvanceToEpisode: { selectedEpisode = $0 },
@@ -81,7 +85,7 @@ struct MovieDetailView: View {
                             movie: movie,
                             isLoadingDetail: library.isLoadingDetail,
                             isFavorite: favorites.isFavorite(movie, sourceID: library.activeVideoSourceID),
-                            watchProgress: watchProgress.progress(for: movie, sourceID: library.activeVideoSourceID)
+                            watchProgress: currentWatchProgress
                         ) {
                             favorites.toggle(movie, source: library.activeVideoSource)
                         }
@@ -117,42 +121,19 @@ struct MovieDetailView: View {
 
                 Spacer()
 
-                if let previousEpisode {
-                    Button {
-                        playPreviousEpisode()
-                    } label: {
-                        Label("上一集", systemImage: "backward.end.fill")
-                    }
-                    .buttonStyle(.bordered)
-                    .help("播放上一集：\(previousEpisode.title)")
-                }
+                episodeStepper
+            }
 
-                if let nextEpisode {
-                    Button {
-                        playNextEpisode()
-                    } label: {
-                        Label("下一集", systemImage: "forward.end.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(CinemaTheme.accent)
-                    .help("播放下一集：\(nextEpisode.title)")
-                }
+            sourceSelector
 
-                Picker("播放源", selection: Binding(
-                    get: { selectedSource?.id },
-                    set: { selectPlaybackSource(id: $0) }
-                )) {
-                    ForEach(playbackSources) { source in
-                        Text(source.name).tag(source.id as PlaybackSource.ID?)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 168)
+            if let nextEpisode {
+                NextEpisodeSuggestion(episode: nextEpisode, playNextEpisode: playNextEpisode)
             }
 
             EpisodeGrid(
                 episodes: selectedSource?.episodes ?? [],
                 selectedEpisode: selectedEpisode,
+                watchedEpisodeURL: currentWatchProgress?.episodeURL,
                 symbol: "play.circle"
             ) { episode in
                 selectedEpisode = episode
@@ -160,9 +141,74 @@ struct MovieDetailView: View {
         }
     }
 
+    private var sourceSelector: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("播放源", systemImage: "dot.radiowaves.left.and.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(CinemaTheme.textTertiary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(playbackSources) { source in
+                        let isSelected = source.id == selectedSource?.id
+                        Button {
+                            selectPlaybackSource(id: source.id)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: isSelected ? "checkmark.circle.fill" : "play.rectangle")
+                                    Text(source.name)
+                                        .lineLimit(1)
+                                }
+                                .font(.callout.weight(.bold))
+                                Text("\(source.episodes.count) 集 · \(sourceAvailabilityText(source))")
+                                    .font(.caption)
+                                    .foregroundStyle(isSelected ? .white.opacity(0.72) : CinemaTheme.textTertiary)
+                            }
+                            .frame(width: 164, alignment: .leading)
+                            .padding(10)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(isSelected ? .white : CinemaTheme.textPrimary)
+                        .background(isSelected ? AnyShapeStyle(CinemaTheme.redGradient) : AnyShapeStyle(CinemaTheme.elevatedBackground), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(isSelected ? Color.white.opacity(0.12) : CinemaTheme.separator, lineWidth: 1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var episodeStepper: some View {
+        HStack(spacing: 8) {
+            if let previousEpisode {
+                Button {
+                    playPreviousEpisode()
+                } label: {
+                    Label("上一集", systemImage: "backward.end.fill")
+                }
+                .buttonStyle(.bordered)
+                .help("播放上一集：\(previousEpisode.title)")
+            }
+
+            if let nextEpisode {
+                Button {
+                    playNextEpisode()
+                } label: {
+                    Label("下一集", systemImage: "forward.end.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(CinemaTheme.accent)
+                .help("播放下一集：\(nextEpisode.title)")
+            }
+        }
+    }
+
     private func downloadSection(_ movie: VodItem) -> some View {
         DetailSection(title: "下载", systemImage: "arrow.down.circle") {
-            EpisodeGrid(episodes: downloadEpisodes, selectedEpisode: nil, symbol: "arrow.down.circle") { episode in
+            EpisodeGrid(episodes: downloadEpisodes, selectedEpisode: nil, watchedEpisodeURL: nil, symbol: "arrow.down.circle") { episode in
                 downloads.download(episode, movieName: movie.vodName)
             }
         }
@@ -197,6 +243,13 @@ struct MovieDetailView: View {
             .first { $0.id == id }?
             .episodes
             .first
+    }
+
+    private func sourceAvailabilityText(_ source: PlaybackSource) -> String {
+        if source.episodes.contains(where: { downloads.canCache($0.url) }) {
+            return "可缓存直链"
+        }
+        return "在线播放"
     }
 
     private func recordWatchProgress(
@@ -389,6 +442,7 @@ private struct DetailSection<Content: View>: View {
 private struct EpisodeGrid: View {
     let episodes: [Episode]
     let selectedEpisode: Episode?
+    let watchedEpisodeURL: URL?
     var symbol: String
     let action: (Episode) -> Void
 
@@ -400,28 +454,70 @@ private struct EpisodeGrid: View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
             ForEach(episodes) { episode in
                 let isSelected = selectedEpisode?.id == episode.id
+                let isWatched = watchedEpisodeURL == episode.url
 
                 Button {
                     action(episode)
                 } label: {
-                    Label(episode.title, systemImage: symbol)
-                        .font(.callout.weight(.semibold))
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    HStack(spacing: 6) {
+                        Image(systemName: isWatched ? "clock.arrow.circlepath" : symbol)
+                        Text(episode.title)
+                            .lineLimit(1)
+                        if isWatched {
+                            Text("上次")
+                                .font(.caption2.weight(.bold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(.white.opacity(0.16), in: Capsule())
+                        }
+                    }
+                    .font(.callout.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(isSelected ? .white : CinemaTheme.textPrimary)
+                .foregroundStyle(isSelected || isWatched ? .white : CinemaTheme.textPrimary)
                 .background(
-                    isSelected ? AnyShapeStyle(CinemaTheme.redGradient) : AnyShapeStyle(CinemaTheme.elevatedBackground),
+                    isSelected ? AnyShapeStyle(CinemaTheme.redGradient) : AnyShapeStyle(isWatched ? CinemaTheme.accent.opacity(0.42) : CinemaTheme.elevatedBackground),
                     in: RoundedRectangle(cornerRadius: 8)
                 )
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(isSelected ? Color.white.opacity(0.12) : CinemaTheme.separator, lineWidth: 1)
+                        .stroke(isSelected || isWatched ? Color.white.opacity(0.16) : CinemaTheme.separator, lineWidth: 1)
                 }
             }
+        }
+    }
+}
+
+private struct NextEpisodeSuggestion: View {
+    let episode: Episode
+    let playNextEpisode: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "forward.end.fill")
+                .foregroundStyle(CinemaTheme.accentHot)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("下一集建议")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(CinemaTheme.textTertiary)
+                Text(episode.title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(CinemaTheme.textPrimary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Button("播放下一集", action: playNextEpisode)
+                .buttonStyle(.borderedProminent)
+                .tint(CinemaTheme.accent)
+        }
+        .padding(12)
+        .background(CinemaTheme.elevatedBackground, in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(CinemaTheme.separator, lineWidth: 1)
         }
     }
 }
