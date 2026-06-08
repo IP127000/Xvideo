@@ -1,16 +1,14 @@
-# Xvideo 对标 Animeko 开发计划
+# Xvideo 对标 Animeko 开发计划（历史参考）
 
-更新日期：2026-06-06
+更新日期：2026-06-08
+
+> 本文最初为桌面/macOS 对标计划。当前 `ios` 分支只默认面向 iOS App 开发，本文不再定义执行 workflow、验收门禁或发布流程。后续如果继续参考本计划，应先把目标转译为 iPhone 触屏体验，并按根目录 `AGENTS.md` 与 `Docs/WorkflowSkills/` 的 iOS 分层 workflow 执行。
 
 ## 目标
 
-将 Xvideo 从“资源站影视浏览器”推进为接近 Animeko 的“找番、追番、看番一体化”桌面客户端。功能和布局参考 open-ani/animeko，但明确不做账户登录、Bangumi 登录、云同步和需要用户账号体系的能力。
+将 Xvideo 的 iOS 形态从“资源站影视浏览器”推进为接近 Animeko 的“找番、追番、看番一体化”触屏客户端。功能概念可参考 open-ani/animeko，但交互、布局、验收和发布必须以 iPhone 为默认表面，并且明确不做账户登录、Bangumi 登录、云同步和需要用户账号体系的能力。
 
-测试资源统一使用：
-
-```text
-https://cj.lziapi.com/api.php/provide/vod/at/xml/
-```
+测试资源使用用户本地配置的数据源。文档、验收记录和提交信息中不要记录具体私有源名称、源 URL、凭据或私人测试数据。
 
 ## 范围边界
 
@@ -23,7 +21,7 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 - 离线：下载/缓存任务页、任务状态、失败重试、文件管理。
 - 弹幕：播放器弹幕层、开关和基础显示设置。
 - 设置：数据源、播放器、弹幕、缓存、本地数据导入导出。
-- 大屏/PC 布局：左侧主导航、首页分区、找番页、时间表、详情页、播放器、缓存页、设置页。
+- iPhone 触屏布局：底部标签、首页分区、找番页、时间表、详情页、播放器、缓存页、设置页。iPad 或桌面布局只有在用户明确要求时才进入默认目标。
 
 ### 不做或本地替代
 
@@ -41,7 +39,7 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 - 数据源添加、测试、切换和删除。
 - 最新更新、分类、关键词搜索、年份/地区筛选。
 - 海报、简介、演员、导演、年份、地区、评分、播放列表详情。
-- 内嵌播放器、播放窗口、上一集/下一集、15 秒快进/快退。
+- 内嵌播放器、全屏播放、上一集/下一集、15 秒快进/快退。
 - 本地收藏，收藏绑定数据源。
 - 本地继续观看记录，支持恢复剧集和时间点。
 - mp4 直链下载和下载架子。
@@ -58,37 +56,13 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 
 ## 开发流程
 
-每个阶段都按同一套流程推进：
+本文不再维护独立执行流程。任何阶段如果重新启用，统一按根目录 `AGENTS.md` 选择 iOS workflow level，并按 `Docs/WorkflowSkills/` 中对应 skill 执行：
 
-1. Inspect
-   - `git status -sb`
-   - 确认分支、远端、最近提交。
-   - 保留无关未跟踪或用户改动。
-2. Implement
-   - 只改本阶段相关文件。
-   - SwiftUI/AppKit 沿用现有项目结构。
-   - 手工编辑使用 `apply_patch`。
-3. Build
-   - 代码变更后运行 `swift build`。
-   - 修完所有编译错误再继续。
-4. App Test
-   - UI、播放、下载、数据源相关变更运行 `Scripts/build_app.sh`。
-   - 启动 `.build/app/Xvideo.app` 测真实 macOS 工作流。
-   - 真实交互测试优先使用 [@电脑](plugin://computer-use@openai-bundled)，通过应用状态、点击、输入、快捷键等操作验证流程。
-   - 只有电脑插件不可用、无法访问目标窗口或会阻塞测试时，才降级为截图检查或人工说明，并在测试记录里写明原因。
-5. Documentation
-   - 用户可见功能变更同步 `README.md` 和 `README.en.md`。
-   - 架构或计划变化同步 `Docs/`。
-6. Commit and Push
-   - 只 stage 本阶段相关文件。
-   - 本地提交，提交信息清楚描述功能。
-   - 推送到 GitHub。
-7. Release
-   - App 行为或代码变更需要打包 release。
-   - tag 使用日期：`YYYY-MM-DD`。
-   - 资产名：`Xvideo-YYYY-MM-DD-macOS.zip`。
-   - release notes 顺序固定：`中文`、`English`、`Verification`、`Build`。
-   - release notes 包含资产名和 SHA-256。
+1. Workflow 或文档调整走 Level 0；只改相关文档，不跑 iOS 构建、安装、验收、发布，除非用户明确要求验证构建、签名或安装说明。
+2. 内部代码或重构走 Level 1；使用 `Xvideo iOS Plan-First Implementation`，先计划，再按架构边界修改，并运行 iOS 编译门禁。
+3. 用户可见 iPhone 行为走 Level 2；使用 `Xvideo iOS Feature Intake`、`Xvideo iOS Documentation` 和按风险需要的 `Xvideo iPhone Acceptance`。
+4. 签名、安装、设备、脚本或 iOS 分发路径走 Level 3；使用 `Scripts/build_ios_xcode_app.sh`、`Scripts/install_ios_app.sh` 和 `devicectl` 记录证据。
+5. 提交、推送、打包和发布只在用户明确要求时执行；使用 `Xvideo iOS Publish and Package`，不要从本文触发非 iOS 发布产物。
 
 ## 阶段计划
 
@@ -98,7 +72,7 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 
 开发内容：
 
-- 重排左侧主导航：
+- 重排 iPhone 底部标签和导航栈：
   - 首页
   - 找番
   - 时间表
@@ -106,8 +80,8 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
   - 我的收藏
   - 离线缓存
   - 设置
-- 分类从主导航移入“找番”页，避免侧边栏被源分类占满。
-- 数据源状态放到底部状态区，显示当前源、格式、健康状态。
+- 分类从主入口移入“找番”页，避免底部标签被源分类占满。
+- 数据源状态放到视频源页和必要的轻量状态区，显示当前源、格式、健康状态。
 - 首页改成分区流：
   - 继续观看
   - 今日/本周更新
@@ -125,19 +99,19 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 
 测试标准：
 
-- 最小窗口 `1280x780` 不重叠。
-- 侧边栏所有入口可切换。
+- iPhone 竖屏首屏不重叠，底部标签和主要操作可触达。
+- 底部标签和二级导航所有入口可切换。
 - 首页各分区有加载、空状态、错误状态。
 - 当前已有浏览、收藏、继续观看入口不回退。
 
 验收标准：
 
 - 打开 App 第一屏能看出是追番应用，而不是普通影视库。
-- 入口结构和 Animeko PC 端主要模块一致，排除账号入口。
+- 入口结构在 iPhone 底部标签和触屏导航中覆盖 Animeko 的主要模块，排除账号入口。
 
 ### Phase 2：本地索引和测试源适配
 
-目标：基于 XML 测试源建立可复用的本地聚合索引，为时间表、标签和发现页服务。
+目标：基于用户配置的数据源建立可复用的本地聚合索引，为时间表、标签和发现页服务。
 
 开发内容：
 
@@ -169,7 +143,7 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 
 测试标准：
 
-- 使用指定 XML 源能生成分类、标签、年份、地区、更新时间索引。
+- 使用用户配置的测试源能生成分类、标签、年份、地区、更新时间索引。
 - 空字段、HTML 简介、异常数字字段不崩溃。
 - 搜索不支持时仍能保留浏览能力。
 
@@ -217,11 +191,11 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 验收标准：
 
 - 找番页能完成“搜索、筛选、看详情、播放”的闭环。
-- 布局接近 Animeko PC 搜索/详情体验。
+- 布局接近 Animeko 的信息密度，但交互以 iPhone 搜索/详情体验为准。
 
 ### Phase 4：新番时间表
 
-目标：对标 Animeko 的“新番时间表”。测试源不是 Bangumi，所以时间表使用资源站更新时间做本地替代。
+目标：对标 Animeko 的“新番时间表”。用户配置的数据源不是 Bangumi，所以时间表使用资源站更新时间做本地替代。
 
 开发内容：
 
@@ -243,7 +217,7 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 
 测试标准：
 
-- 指定 XML 源能展示最近更新时间。
+- 用户配置的测试源能展示最近更新时间。
 - 日期切换不丢状态。
 - 无时间字段内容可降级显示。
 - 点击卡片进入详情。
@@ -326,7 +300,7 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 
 - 弹幕开关不会影响播放。
 - 弹幕层不遮挡播放器控制。
-- 全屏窗口和内嵌播放器表现一致。
+- 全屏播放器和内嵌播放器表现一致。
 - 无弹幕、弹幕文件解析失败都不崩溃。
 
 验收标准：
@@ -351,7 +325,7 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
   - 取消
   - 重试
   - 删除
-  - Finder 中显示
+  - 在应用内或系统 Files 可访问位置显示
 - 对不支持缓存的资源显示原因。
 - m3u8 缓存作为独立能力评估；未实现前 UI 明确“当前仅支持直链资源缓存”。
 
@@ -379,7 +353,7 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 
 开发内容：
 
-- 新增设置入口或设置窗口。
+- 新增设置入口或设置页。
 - 设置分区：
   - 数据源
   - 播放器
@@ -419,15 +393,15 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 - 统一导航密度、卡片圆角、间距、标题层级。
 - 统一空状态、加载状态、错误状态。
 - 检查所有按钮图标和 tooltip。
-- 大屏优先，同时保证最小窗口可用。
-- 截图更新 README 预览图。
+- iPhone 竖屏优先，同时保证常见小屏和大屏 iPhone 可用。
+- iPhone 截图更新 README 预览图。
 
 测试视口：
 
-- `1280x780`
-- `1440x900`
-- `1728x1117`
-- 宽屏外接显示器
+- 小屏 iPhone
+- 标准尺寸 iPhone
+- 大屏 iPhone
+- 横屏播放器场景
 
 测试标准：
 
@@ -439,24 +413,23 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 
 验收标准：
 
-- 主界面、找番、时间表、详情、播放器、缓存、设置都能看出 Animeko PC 端参考痕迹。
+- 主界面、找番、时间表、详情、播放器、缓存、设置都能看出 Animeko 参考痕迹，同时保持 iPhone 触屏可用性。
 
 ## 测试计划
 
 ### 测试执行原则
 
-- UI、播放器、数据源管理、下载、缓存、设置等真实 macOS 工作流尽量使用 [@电脑](plugin://computer-use@openai-bundled) 执行。
-- 每次使用电脑插件测试前，先获取 Xvideo 关键窗口状态，再进行点击、输入、快捷键、菜单或窗口操作。
-- 电脑插件优先覆盖：
+- UI、播放器、数据源管理、下载、缓存、设置等真实 iPhone 工作流按 `AGENTS.md` 的 Level 2/Level 3 规则和 `Docs/WorkflowSkills/IPhoneAcceptance.md` 验证。
+- iOS 编译是代码变更的默认门禁；签名、安装、真机启动和 `devicectl` 证据只在设备相关或高风险用户流程中要求。
+- 可用时优先使用 iOS Simulator、iOS UI 工具或真机来覆盖：
   - 添加和测试数据源。
-  - 搜索、筛选、切换导航。
-  - 打开详情、播放、上一集/下一集、播放窗口。
+  - 搜索、筛选、切换底部标签。
+  - 打开详情、播放、上一集/下一集、全屏播放。
   - 继续观看恢复、收藏、下载、缓存页操作。
   - 设置修改、弹幕开关、缓存清理等交互。
-- 命令行测试主要用于构建、打包、哈希、git 状态和 release 检查；不能替代可交互 UI 流程验收。
 - 截图只作为视觉证据和兜底手段，不能单独证明按钮、输入框、播放控制或设置项真的可用。
-- 如果因为权限、窗口不可见、插件失败或系统弹窗导致无法使用电脑插件，必须在测试记录中写明：
-  - 失败环节。
+- 如果因为无设备、未信任开发者、Developer Mode 未开启、签名缺失或 UI 自动化不可用导致无法完成真机验收，必须在验收记录中写明：
+  - 阻塞环节。
   - 降级方式。
   - 未覆盖的风险。
 
@@ -464,7 +437,7 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 
 用例：
 
-- 添加指定 XML 源。
+- 添加用户配置的测试源。
 - 测试连接。
 - 加载分类。
 - 加载首页列表。
@@ -563,8 +536,8 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 - 播放失败源。
 - 上一集/下一集。
 - 快进/快退 15 秒。
-- 打开播放窗口。
-- 全屏或独立窗口退出。
+- 打开全屏播放。
+- 从全屏返回详情。
 - 自动下一集。
 
 通过标准：
@@ -600,7 +573,7 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 - 收藏影片。
 - 取消收藏。
 - 收藏页打开详情。
-- 收藏页双击播放。
+- 收藏页点击继续播放。
 - 删除收藏所属数据源后打开收藏。
 
 通过标准：
@@ -616,7 +589,7 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 - 下载直链资源。
 - 查看下载中任务。
 - 下载完成。
-- Finder 显示。
+- 在应用内或系统 Files 可访问位置查看。
 - 下载失败。
 - 删除缓存。
 - 不支持缓存的地址。
@@ -668,10 +641,10 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 
 用例：
 
-- `1280x780`
-- `1440x900`
-- `1728x1117`
-- 宽屏外接显示器
+- 小屏 iPhone
+- 标准尺寸 iPhone
+- 大屏 iPhone
+- 横屏播放器
 - 长标题
 - 缺海报
 - 大量剧集
@@ -687,33 +660,29 @@ https://cj.lziapi.com/api.php/provide/vod/at/xml/
 
 ### 13. 回归测试
 
-每个阶段必须执行：
+代码变更默认执行 iOS 编译门禁：
 
 ```bash
-swift build
+swift build --triple arm64-apple-ios17.0 --sdk "$(xcrun --sdk iphoneos --show-sdk-path)"
 ```
 
-涉及 UI、播放器、数据源、下载、设置时执行：
+涉及签名、安装、设备启动或高风险用户流程时，按需执行：
 
 ```bash
-Scripts/build_app.sh
-open .build/app/Xvideo.app
+IOS_DEVICE_UDID="<iphone-udid>" Scripts/build_ios_xcode_app.sh
+IOS_DEVICE_ID="<paired-device-id>" Scripts/install_ios_app.sh
+xcrun devicectl device info apps --device "<paired-device-id>"
+xcrun devicectl device info processes --device "<paired-device-id>"
 ```
 
-然后优先使用 [@电脑](plugin://computer-use@openai-bundled) 完成对应页面的真实交互回归。至少记录：
+然后使用能代表 iPhone 行为的模拟器、真机或 UI 工具完成对应页面的真实交互回归。至少记录：
 
-- 电脑插件确认到的当前窗口或关键界面。
-- 实际点击/输入/快捷键覆盖的核心路径。
+- 当前界面或关键状态。
+- 实际点击/输入/手势覆盖的核心路径。
 - 是否出现布局遮挡、无响应、错误弹窗或播放失败。
-- 如未使用电脑插件，说明降级原因。
+- 如未完成真机或 UI 自动化，说明阻塞原因和剩余风险。
 
-发布前执行：
-
-```bash
-git diff --check
-ditto -c -k --sequesterRsrc --keepParent .build/app/Xvideo.app .build/releases/Xvideo-YYYY-MM-DD-macOS.zip
-shasum -a 256 .build/releases/Xvideo-YYYY-MM-DD-macOS.zip
-```
+提交、推送、打包和发布只在用户明确要求时执行。不要从本文触发非 iOS zip、非 iOS release 或 GitHub Release 更新。
 
 ## 最终验收标准
 
@@ -723,34 +692,30 @@ shasum -a 256 .build/releases/Xvideo-YYYY-MM-DD-macOS.zip
    - 找番、时间表、标签搜索、追番进度、详情、播放、收藏、离线缓存、弹幕、设置均可用。
    - 账户登录和云同步不出现。
    - 账号相关能力有本地替代。
-2. 指定源验收
-   - 指定 XML 测试源能完成：添加、测试、浏览、搜索、筛选、时间表、详情、播放、继续观看、收藏、下载或缓存。
+2. 测试源验收
+   - 用户配置的测试源能完成：添加、测试、浏览、搜索、筛选、时间表、详情、播放、继续观看、收藏、下载或缓存。
 3. 异常验收
    - 无效源、空结果、无播放地址、图片失败、播放失败、下载失败都不崩溃。
 4. 布局验收
    - 首页、找番、时间表、详情、播放器、离线缓存、设置都符合 Animeko 式追番客户端结构。
-   - `1280x780` 到大屏宽屏均可用。
+   - 常见 iPhone 竖屏尺寸均可用，播放器横屏场景不重叠。
 5. 工程验收
-   - `swift build` 通过。
-   - `Scripts/build_app.sh` 通过。
-   - 真实启动 `.build/app/Xvideo.app` 通过。
-   - 涉及 UI/播放/设置/下载/缓存的阶段，已优先使用 [@电脑](plugin://computer-use@openai-bundled) 完成交互验收，或记录了不能使用的具体原因。
-   - README 更新。
-   - release notes 格式正确。
-   - GitHub release 资产和 SHA-256 正确。
+   - iOS 编译门禁通过。
+   - 需要真机验证时，`Scripts/build_ios_xcode_app.sh`、`Scripts/install_ios_app.sh` 和 `devicectl` 证据已记录，或阻塞原因已记录。
+   - 涉及 UI/播放/设置/下载/缓存的阶段，已使用能代表 iPhone 行为的模拟器、真机或 UI 工具完成交互验收，或记录了不能使用的具体原因。
+   - README 在公共使用、安装、签名、截图或行为说明受影响时已更新。
 
 ## 阶段交付定义
 
-每个阶段完成时必须留下：
+每个阶段完成时应留下：
 
-- 已提交代码。
-- 已推送远端。
 - 已记录测试结果。
-- 测试结果说明电脑插件覆盖了哪些真实交互，或说明未使用电脑插件的原因。
-- 如涉及 App 行为，已发布同日 release。
+- 测试结果说明覆盖了哪些真实 iPhone 交互，或说明未能覆盖的原因。
+- 已按需要更新 README、`Docs/FeatureList.md` 和 `Docs/Acceptance/`。
+- 如用户明确要求发布，才提交、推送或准备分发产物。
 - final response 中说明：
   - 完成了什么。
   - 跑了哪些测试。
-  - README 是否更新。
-  - release 是否更新。
+  - README 是否受影响，以及是否更新。
+  - 是否跳过构建、安装、真机验收、提交、推送或发布，以及原因。
   - 工作树状态。

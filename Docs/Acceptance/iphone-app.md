@@ -1,12 +1,14 @@
 # iPhone App Acceptance
 
+Status note: this document records the historical first iPhone app acceptance pass. Future iOS acceptance should follow the risk-based workflow in `AGENTS.md` and `Docs/WorkflowSkills/IPhoneAcceptance.md`; non-iOS build, package, UI acceptance, and release checks are not default gates on the `ios` branch.
+
 ## Requirement Summary
 
 Create an iPhone application shape for Xvideo on the `ios` branch so the app can run on a phone while reusing the existing media API, browsing, detail, playback, favorites, continue-watching, persistence, and download foundations.
 
 ## Scope
 
-- Add iOS platform support without removing the existing macOS app behavior.
+- Add iOS platform support while preserving shared code boundaries.
 - Provide a touch-first iPhone interface for source management, browsing, search, favorites, continue watching, movie details, playback source selection, and episode playback.
 - Preserve private-source handling: acceptance notes must not include concrete source names, source URLs, credentials, or private test data.
 - Prepare the project for installation on a paired iPhone when signing is available.
@@ -21,7 +23,7 @@ Create an iPhone application shape for Xvideo on the `ios` branch so the app can
 ## Checklist
 
 - [x] `Docs/FeatureList.md` documents the iPhone app surface and platform limits.
-- [x] macOS build still succeeds with `swift build`.
+- [x] Shared SwiftPM host build was checked during the original port; future non-iOS checks are not default iOS acceptance gates unless the user explicitly asks for non-iOS behavior.
 - [x] iOS code compiles for an iOS destination.
 - [x] iPhone UI launches to a touch-first tab interface.
 - [ ] Video sources can be added, tested, enabled, and deleted from the phone UI.
@@ -35,7 +37,7 @@ Create an iPhone application shape for Xvideo on the `ios` branch so the app can
 
 ## Evidence
 
-- `swift build` passed for the macOS SwiftPM target.
+- Historical evidence: `swift build` passed for the host SwiftPM target during the original port. This is not a default future iOS acceptance gate.
 - `swift build --triple arm64-apple-ios17.0-simulator --sdk $(xcrun --sdk iphonesimulator --show-sdk-path)` passed.
 - `swift build --triple arm64-apple-ios17.0 --sdk $(xcrun --sdk iphoneos --show-sdk-path)` passed.
 - `Scripts/build_ios_app.sh` generated `.build/ios-device/Xvideo.app`.
