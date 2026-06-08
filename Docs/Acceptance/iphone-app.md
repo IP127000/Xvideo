@@ -38,13 +38,15 @@ Create an iPhone application shape for Xvideo on the `ios` branch so the app can
 - `swift build --triple arm64-apple-ios17.0-simulator --sdk $(xcrun --sdk iphonesimulator --show-sdk-path)` passed.
 - `swift build --triple arm64-apple-ios17.0 --sdk $(xcrun --sdk iphoneos --show-sdk-path)` passed.
 - `Scripts/build_ios_app.sh` generated `.build/ios-device/Xvideo.app`.
+- `IOS_AD_HOC_SIGN=1 Scripts/build_ios_app.sh` generated an ad-hoc signed temporary app bundle for install probing.
 - `Scripts/build_app.sh` generated `.build/app/Xvideo.app`.
 - The macOS app launched and displayed the main Xvideo window through Computer Use.
 - `xcrun devicectl list devices` reported a paired iPhone as available.
 - `security find-identity -v -p codesigning` reported `0 valid identities found`.
 - `Scripts/install_ios_app.sh` stopped before install because `.build/ios-device/Xvideo.app` has no embedded provisioning profile.
-- iPhone click-through acceptance is blocked until a valid Apple Development signing identity and matching provisioning profile are available.
+- `IOS_ALLOW_AD_HOC=1 IOS_DEVICE_ID=<paired-device-id> Scripts/install_ios_app.sh` reached the device install service, then failed with `Developer Mode is disabled`.
+- iPhone click-through acceptance is blocked until Developer Mode is enabled on the phone. A valid Apple Development signing identity and matching provisioning profile may still be required after that for non-ad-hoc installs.
 
 ## Conclusion
 
-Blocked for physical iPhone acceptance by local signing/provisioning. The iOS code path compiles for simulator and device destinations, and the unsigned iPhone app bundle is generated.
+Blocked for physical iPhone acceptance by Developer Mode being disabled on the phone. The iOS code path compiles for simulator and device destinations, and both unsigned and ad-hoc signed iPhone app bundles can be generated locally.

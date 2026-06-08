@@ -71,6 +71,13 @@ IOS_PROVISIONING_PROFILE="/path/to/profile.mobileprovision" \
 IOS_DEVICE_ID="<paired-device-id>" ./Scripts/install_ios_app.sh
 ```
 
+For temporary install probing, ad-hoc signing can be attempted. The phone must have Developer Mode enabled, and iOS may still require a real provisioning profile:
+
+```bash
+IOS_AD_HOC_SIGN=1 ./Scripts/build_ios_app.sh
+IOS_ALLOW_AD_HOC=1 IOS_DEVICE_ID="<paired-device-id>" ./Scripts/install_ios_app.sh
+```
+
 ## Project Structure
 
 ```text

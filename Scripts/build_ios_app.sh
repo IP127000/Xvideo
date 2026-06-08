@@ -8,6 +8,7 @@ IOS_BUNDLE_ID="${IOS_BUNDLE_ID:-com.seeker.xvideo}"
 IOS_SIGNING_IDENTITY="${IOS_SIGNING_IDENTITY:-}"
 IOS_PROVISIONING_PROFILE="${IOS_PROVISIONING_PROFILE:-}"
 IOS_ENTITLEMENTS="${IOS_ENTITLEMENTS:-}"
+IOS_AD_HOC_SIGN="${IOS_AD_HOC_SIGN:-0}"
 
 SDK_PATH="$(xcrun --sdk iphoneos --show-sdk-path)"
 BUILD_DIR="$ROOT_DIR/.build/$IOS_TRIPLE/$CONFIGURATION"
@@ -19,10 +20,6 @@ swift build -c "$CONFIGURATION" --triple "$IOS_TRIPLE" --sdk "$SDK_PATH"
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR"
 cp "$BUILD_DIR/Xvideo" "$APP_DIR/Xvideo"
-
-if [ -d "$BUILD_DIR/Xvideo_Xvideo.bundle" ]; then
-    ditto "$BUILD_DIR/Xvideo_Xvideo.bundle" "$APP_DIR/Xvideo_Xvideo.bundle"
-fi
 
 if [ -d "$ROOT_DIR/Sources/Xvideo/Resources" ]; then
     ditto "$ROOT_DIR/Sources/Xvideo/Resources" "$APP_DIR/Resources"
@@ -82,6 +79,9 @@ if [ -n "$IOS_SIGNING_IDENTITY" ]; then
         SIGN_ARGS+=(--entitlements "$IOS_ENTITLEMENTS")
     fi
     codesign "${SIGN_ARGS[@]}" --deep "$APP_DIR"
+elif [ "$IOS_AD_HOC_SIGN" = "1" ]; then
+    codesign --force --sign - --timestamp=none --deep "$APP_DIR"
+    echo "Built ad-hoc signed iOS app. Physical devices may still reject it without Developer Mode and a provisioning profile." >&2
 else
     echo "Built unsigned iOS app. Set IOS_SIGNING_IDENTITY and IOS_PROVISIONING_PROFILE to prepare for device install." >&2
 fi

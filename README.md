@@ -71,6 +71,13 @@ IOS_PROVISIONING_PROFILE="/path/to/profile.mobileprovision" \
 IOS_DEVICE_ID="<paired-device-id>" ./Scripts/install_ios_app.sh
 ```
 
+如果只是临时探测安装通道，可尝试 ad-hoc 签名；手机必须开启 Developer Mode，且系统仍可能要求正式 provisioning profile：
+
+```bash
+IOS_AD_HOC_SIGN=1 ./Scripts/build_ios_app.sh
+IOS_ALLOW_AD_HOC=1 IOS_DEVICE_ID="<paired-device-id>" ./Scripts/install_ios_app.sh
+```
+
 ## 项目结构
 
 ```text
