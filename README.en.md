@@ -51,6 +51,17 @@ The build script creates:
 
 ## Build The iPhone App Bundle
 
+For physical-device installs, prefer the Xcode automatic-signing script. It generates a temporary Xcode project, signs with the local Apple Development certificate and team, then copies the result to `.build/ios-device/Xvideo.app`:
+
+```bash
+IOS_DEVICE_UDID="<iphone-udid>" ./Scripts/build_ios_xcode_app.sh
+IOS_DEVICE_ID="<paired-device-id>" ./Scripts/install_ios_app.sh
+```
+
+If iOS reports that the developer app is not trusted, trust the matching Apple Development profile on the phone in Settings > General > VPN & Device Management before launching again.
+
+The SwiftPM packaging path is still available for unsigned, manually signed, or install-probing bundles:
+
 ```bash
 ./Scripts/build_ios_app.sh
 ```
@@ -61,7 +72,7 @@ The script creates:
 .build/ios-device/Xvideo.app
 ```
 
-Installing on a physical iPhone requires a valid Apple Development signing certificate in the local keychain and a provisioning profile that matches `IOS_BUNDLE_ID`:
+Manual physical iPhone signing requires a valid Apple Development signing certificate in the local keychain and a provisioning profile that matches `IOS_BUNDLE_ID`:
 
 ```bash
 IOS_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" \

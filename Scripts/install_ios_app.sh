@@ -32,4 +32,10 @@ if ! codesign --verify --strict "$APP_DIR" >/dev/null 2>&1; then
 fi
 
 xcrun devicectl device install app --device "$DEVICE_ID" "$APP_DIR"
-xcrun devicectl device process launch --device "$DEVICE_ID" "$IOS_BUNDLE_ID"
+
+if ! xcrun devicectl device process launch --device "$DEVICE_ID" "$IOS_BUNDLE_ID"; then
+    echo "App installed, but iOS refused to launch it." >&2
+    echo "If the error mentions an untrusted profile, trust the Apple Development profile on the phone:" >&2
+    echo "Settings > General > VPN & Device Management > Apple Development > Trust." >&2
+    exit 1
+fi

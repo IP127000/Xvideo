@@ -51,6 +51,17 @@ open .build/app/Xvideo.app
 
 ## 构建 iPhone App 包
 
+真机安装优先使用 Xcode 自动签名脚本。脚本会生成临时 Xcode 工程，使用本机 Apple Development 证书和 Team 自动签名，并把结果复制到 `.build/ios-device/Xvideo.app`：
+
+```bash
+IOS_DEVICE_UDID="<iphone-udid>" ./Scripts/build_ios_xcode_app.sh
+IOS_DEVICE_ID="<paired-device-id>" ./Scripts/install_ios_app.sh
+```
+
+如果手机提示开发者 App 未受信任，需要在手机上进入“设置 > 通用 > VPN 与设备管理”，信任对应的 Apple Development profile 后再启动。
+
+也可以使用 SwiftPM 打包路径生成未签名或手动签名包：
+
 ```bash
 ./Scripts/build_ios_app.sh
 ```
@@ -61,7 +72,7 @@ open .build/app/Xvideo.app
 .build/ios-device/Xvideo.app
 ```
 
-安装到真机需要本机钥匙串里有可用的 Apple Development 签名证书，并提供匹配 `IOS_BUNDLE_ID` 的 provisioning profile：
+手动签名安装到真机需要本机钥匙串里有可用的 Apple Development 签名证书，并提供匹配 `IOS_BUNDLE_ID` 的 provisioning profile：
 
 ```bash
 IOS_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" \

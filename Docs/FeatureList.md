@@ -140,9 +140,10 @@
 - iPhone 版搜索页支持关键字搜索并展示结果列表。
 - iPhone 版详情页支持查看海报、简介、元信息、收藏状态、播放源和剧集列表。
 - iPhone 版播放器支持普通直链或流媒体地址的原生播放，也支持 `/share/` 网页播放地址的内嵌网页播放。
+- iPhone 版播放器提供全屏入口，普通原生播放会复用当前播放器状态进入全屏。
 - iPhone 版会继续记录观看进度，并可从“继续观看”恢复影片、播放源和剧集。
 - iPhone 版下载文件保存到应用文档目录下的 `Xvideo` 文件夹；macOS 版仍保存到 `~/Downloads/Xvideo`。
-- 仓库提供 `Scripts/build_ios_app.sh` 和 `Scripts/install_ios_app.sh` 生成并安装 iPhone `.app` 包。
+- 仓库提供 `Scripts/build_ios_xcode_app.sh` 生成 Xcode 自动签名 iPhone `.app` 包，并提供 `Scripts/build_ios_app.sh` 作为手动签名/探测路径。
 - iPhone 真机安装需要已连接并受信任的设备，以及本机可用的 Apple Development 签名证书或 Xcode 自动签名团队。
 
 ## 操作说明

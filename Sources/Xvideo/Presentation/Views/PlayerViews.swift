@@ -25,6 +25,9 @@ struct PlayerPanel: View {
     @State private var currentURL: URL?
     @StateObject private var navigationState = PlaybackNavigationState()
     @State private var progressTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
+    #if os(iOS)
+    @State private var isFullscreenPresented = false
+    #endif
     private let skipInterval: TimeInterval = 15
 
     var body: some View {
@@ -61,6 +64,14 @@ struct PlayerPanel: View {
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.36), radius: 26, x: 0, y: 16)
+        #if os(iOS)
+        .fullScreenCover(isPresented: $isFullscreenPresented) {
+            PhoneFullscreenPlayerCover(
+                player: queuePlayer.player,
+                navigationState: navigationState
+            )
+        }
+        #endif
         .onAppear {
             syncNavigationState()
             configureQueuePlayer()
@@ -148,6 +159,17 @@ struct PlayerPanel: View {
                 .accessibilityLabel("打开播放窗口")
                 .help("打开播放窗口")
                 .instantTooltip("打开播放窗口")
+                #elseif os(iOS)
+                Button {
+                    syncNavigationState()
+                    isFullscreenPresented = true
+                } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 34, height: 34)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("全屏播放")
                 #endif
             }
             .buttonStyle(.plain)
@@ -860,6 +882,112 @@ private struct PlatformWebVideoPlayer: UIViewRepresentable {
         )
         request.setValue(url.deletingLastPathComponent().absoluteString, forHTTPHeaderField: "Referer")
         return request
+    }
+}
+
+private struct PhoneFullscreenPlayerCover: View {
+    let player: AVPlayer
+    @ObservedObject var navigationState: PlaybackNavigationState
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Color.black
+                .ignoresSafeArea()
+
+            if let episode = navigationState.currentEpisode {
+                Group {
+                    if usesWebPlayerURL(episode.url) {
+                        PlatformWebVideoPlayer(url: episode.url)
+                    } else {
+                        PlatformVideoPlayer(
+                            player: player,
+                            skipBackward: navigationState.skipBackward,
+                            skipForward: navigationState.skipForward
+                        )
+                    }
+                }
+                .ignoresSafeArea()
+            } else {
+                VStack(spacing: 10) {
+                    Image(systemName: "play.rectangle")
+                        .font(.system(size: 52, weight: .light))
+                    Text("选择一集开始播放")
+                        .font(.headline)
+                }
+                .foregroundStyle(.white.opacity(0.82))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            controlsBar
+        }
+        .background(.black)
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
+    }
+
+    private var controlsBar: some View {
+        HStack(spacing: 8) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .bold))
+                    .frame(width: 38, height: 38)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("退出全屏")
+
+            HStack(spacing: 8) {
+                Image(systemName: "play.fill")
+                    .font(.caption)
+                Text(navigationState.currentEpisode?.title ?? "播放中")
+                    .font(.caption.bold())
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 34)
+            .background(.black.opacity(0.62), in: Capsule())
+
+            Spacer(minLength: 8)
+
+            Button {
+                navigationState.playPreviousEpisode()
+            } label: {
+                Image(systemName: "backward.end.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 38, height: 38)
+                    .contentShape(Rectangle())
+            }
+            .disabled(navigationState.previousEpisode == nil)
+            .opacity(navigationState.previousEpisode == nil ? 0.45 : 1)
+            .accessibilityLabel("播放上一集")
+
+            Button {
+                navigationState.playNextEpisode()
+            } label: {
+                Image(systemName: "forward.end.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 38, height: 38)
+                    .contentShape(Rectangle())
+            }
+            .disabled(navigationState.nextEpisode == nil)
+            .opacity(navigationState.nextEpisode == nil ? 0.45 : 1)
+            .accessibilityLabel("播放下一集")
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 14)
+        .background(
+            LinearGradient(
+                colors: [.black.opacity(0.78), .black.opacity(0.34), .clear],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .top)
+        )
     }
 }
 #endif

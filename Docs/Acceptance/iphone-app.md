@@ -23,12 +23,13 @@ Create an iPhone application shape for Xvideo on the `ios` branch so the app can
 - [x] `Docs/FeatureList.md` documents the iPhone app surface and platform limits.
 - [x] macOS build still succeeds with `swift build`.
 - [x] iOS code compiles for an iOS destination.
-- [ ] iPhone UI launches to a touch-first tab interface.
+- [x] iPhone UI launches to a touch-first tab interface.
 - [ ] Video sources can be added, tested, enabled, and deleted from the phone UI.
 - [ ] Latest updates and categories can be browsed from the phone UI.
 - [ ] Search can load keyword results from the phone UI.
 - [ ] Movie detail shows poster, metadata, summary, favorite action, playback sources, and episodes.
 - [ ] Selecting an episode opens native or web playback as appropriate.
+- [ ] Player fullscreen opens from the iPhone player controls and can be dismissed back to detail.
 - [ ] Favorites and continue-watching flows remain accessible on iPhone.
 - [x] If a physical iPhone install is blocked, the blocker is recorded with concrete evidence.
 
@@ -39,14 +40,17 @@ Create an iPhone application shape for Xvideo on the `ios` branch so the app can
 - `swift build --triple arm64-apple-ios17.0 --sdk $(xcrun --sdk iphoneos --show-sdk-path)` passed.
 - `Scripts/build_ios_app.sh` generated `.build/ios-device/Xvideo.app`.
 - `IOS_AD_HOC_SIGN=1 Scripts/build_ios_app.sh` generated an ad-hoc signed temporary app bundle for install probing.
-- `Scripts/build_app.sh` generated `.build/app/Xvideo.app`.
-- The macOS app launched and displayed the main Xvideo window through Computer Use.
+- `Scripts/build_ios_xcode_app.sh` generated a temporary Xcode iOS app project and produced a signed `.build/ios-device/Xvideo.app`.
 - `xcrun devicectl list devices` reported a paired iPhone as available.
-- `security find-identity -v -p codesigning` reported `0 valid identities found`.
-- `Scripts/install_ios_app.sh` stopped before install because `.build/ios-device/Xvideo.app` has no embedded provisioning profile.
+- After Xcode account login, `security find-identity -v -p codesigning` reported an Apple Development identity.
+- The Xcode signed app includes an embedded provisioning profile for `com.seeker.xvideo`.
 - `IOS_ALLOW_AD_HOC=1 IOS_DEVICE_ID=<paired-device-id> Scripts/install_ios_app.sh` reached the device install service, then failed with `Developer Mode is disabled`.
-- iPhone click-through acceptance is blocked until Developer Mode is enabled on the phone. A valid Apple Development signing identity and matching provisioning profile may still be required after that for non-ad-hoc installs.
+- `xcrun devicectl device install app --device <paired-device-id> .build/ios-device/Xvideo.app` installed the signed app on the paired iPhone.
+- `IOS_DEVICE_ID=<paired-device-id> Scripts/install_ios_app.sh` installed and launched `com.seeker.xvideo` successfully after the Apple Development profile was trusted on the phone.
+- `xcrun devicectl device info apps --device <paired-device-id>` listed `Xvideo com.seeker.xvideo 1.0`.
+- `xcrun devicectl device info processes --device <paired-device-id>` listed the running `Xvideo.app/Xvideo` process.
+- iPhone fullscreen playback code compiled for the device target, but physical click-through of selecting an episode and tapping fullscreen has not been directly observed through automation.
 
 ## Conclusion
 
-Blocked for physical iPhone acceptance by Developer Mode being disabled on the phone. The iOS code path compiles for simulator and device destinations, and both unsigned and ad-hoc signed iPhone app bundles can be generated locally.
+Blocked for complete iPhone playback click-through acceptance because physical device UI automation is unavailable in this session. The iOS code path compiles, the Xcode automatic-signing path produces a provisioned app bundle, and the signed app installs and launches on the paired iPhone.
