@@ -2,52 +2,35 @@
 
 [中文](README.md) | [English](README.en.md)
 
-Xvideo 是一个原生 macOS 影视客户端，用 SwiftUI 写界面，通过用户配置的媒体 API 拉取影片列表、详情和播放地址。`ios` 分支同时提供 iPhone 触屏入口，复用同一套数据源、片库、详情、播放、收藏和继续观看能力。
+Xvideo 的 `ios` 分支是原生 iOS 影视客户端开发分支，默认面向 iPhone 触屏使用。应用通过用户配置的媒体 API 拉取影片列表、详情和播放地址，复用同一套数据源、片库、详情、播放、收藏和继续观看能力。
 
-项目现在主要围绕日常观看体验在迭代：浏览分类、搜索影片、查看详情、切换剧集、记录本地追番进度、收藏常看的内容，以及在本地播放器里播放视频。
+项目现在主要围绕手机端日常观看体验在迭代：浏览分类、搜索影片、查看详情、切换剧集、记录本地追番进度、收藏常看的内容，以及在 iPhone 播放器里播放视频。仓库仍保留 macOS 目标和共享 SwiftUI 代码，但 macOS 打包、验收和发布不是此分支的默认流程。
 
 ## 界面预览
 
-主界面采用两栏影院式布局：左侧是媒体库、分类和数据源管理，右侧上半部分显示当前影片详情，下半部分是精选影片和全部影片。点击影片卡片会显示快捷详情并刷新上方详情，双击卡片或点击“开始播放”后进入独立播放页。
+当前预览图来自共享代码中的 macOS 界面，主要用于展示片库和详情能力；`ios` 分支的新开发以 iPhone 底部标签、触屏详情页和播放器为准。
 
 ![Xvideo macOS 应用界面预览](Docs/images/app-preview-blurred.png)
 
 ## 主要功能
 
+- iPhone 版提供片库、搜索、收藏、继续观看和视频源五个底部标签入口
 - 浏览最新更新和影片分类
-- 两栏影院式界面，上方详情面板和播放页分离
+- iPhone 触屏详情页支持海报、简介、收藏、播放源和剧集入口
 - 精选影片优先展示收藏内容，全部影片支持按两排换一批浏览
 - 搜索影片、演员等关键词
 - 查看海报、简介、地区、年份、主演、导演和更新状态
 - 不内置任何数据源，首次使用需添加自己的采集接口
 - 支持多数据源和播放源切换，兼容 JSON、XML 以及扁平 XML 分类接口
 - 播放器内切换上一集、下一集
-- 支持播放器快退/快进 15 秒，播放窗口可用 Esc 退出
+- 支持播放器快退/快进 15 秒
 - 播放剧集时会在本地记录观看进度，可从“继续观看”恢复上次剧集和播放时间
-- 收藏影片会记录所属数据源，并可在“我的收藏”里点击或双击进入播放器继续观看
-- 下载可用的 mp4 资源到 `~/Downloads/Xvideo`
-- iPhone 版提供片库、搜索、收藏、继续观看和视频源五个底部标签入口
+- 收藏影片会记录所属数据源，并可在“我的收藏”里继续观看
+- iPhone 下载文件保存到 App 文档目录下的 `Xvideo` 文件夹；macOS 辅助目标保存到 `~/Downloads/Xvideo`
 
 ## 运行
 
-本项目使用 Swift Package Manager。macOS 版最低支持 macOS 14，iPhone 版最低支持 iOS 17。
-
-```bash
-swift run Xvideo
-```
-
-## 打包成 macOS App
-
-```bash
-./Scripts/build_app.sh
-open .build/app/Xvideo.app
-```
-
-打包脚本会生成：
-
-```text
-.build/app/Xvideo.app
-```
+本项目使用 Swift Package Manager。`ios` 分支默认开发和验收 iPhone App，最低支持 iOS 17。
 
 ## 构建 iPhone App 包
 
@@ -87,6 +70,23 @@ IOS_DEVICE_ID="<paired-device-id>" ./Scripts/install_ios_app.sh
 ```bash
 IOS_AD_HOC_SIGN=1 ./Scripts/build_ios_app.sh
 IOS_ALLOW_AD_HOC=1 IOS_DEVICE_ID="<paired-device-id>" ./Scripts/install_ios_app.sh
+```
+
+## macOS 辅助运行路径
+
+macOS 目标仍可用于共享代码的本地调试，但它不是 `ios` 分支的默认验收或发布路径。
+
+```bash
+swift run Xvideo
+```
+
+## macOS 辅助打包路径
+
+仅在明确需要验证桌面目标时使用：
+
+```bash
+./Scripts/build_app.sh
+open .build/app/Xvideo.app
 ```
 
 ## 项目结构
