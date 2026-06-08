@@ -64,8 +64,7 @@ final class WatchProgressStore: ObservableObject {
     private let maximumItemCount = 80
 
     init(fileManager: FileManager = .default) {
-        let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        let baseURL = AppStorageDirectory.applicationSupport(fileManager: fileManager)
         let directoryURL = baseURL.appendingPathComponent("Xvideo", isDirectory: true)
         fileURL = directoryURL.appendingPathComponent("watch-progress.json")
 

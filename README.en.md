@@ -2,7 +2,7 @@
 
 [中文](README.md) | [English](README.en.md)
 
-Xvideo is a native macOS video client built with SwiftUI. It fetches video lists, details, and playback sources from user-configured media APIs, then presents them in a desktop-style browsing and playback experience.
+Xvideo is a native macOS video client built with SwiftUI. It fetches video lists, details, and playback sources from user-configured media APIs, then presents them in a desktop-style browsing and playback experience. The `ios` branch also adds an iPhone touch interface that reuses the same source, library, detail, playback, favorites, and continue-watching foundations.
 
 The project is focused on everyday watching: browsing categories, searching titles, reading details, switching episodes, tracking local watch progress, saving favorites, and playing videos inside the app.
 
@@ -26,10 +26,11 @@ The main window now uses a two-column cinematic layout: media library, categorie
 - Track local watch progress while episodes play, then resume the last episode and playback time from Continue Watching
 - Favorite videos with their source attached, then click or double-click them in My Favorites to continue watching
 - Download available mp4 resources to `~/Downloads/Xvideo`
+- Use the iPhone tab interface for Library, Search, Favorites, Continue Watching, and Video Sources
 
 ## Run
 
-The project uses Swift Package Manager and requires macOS 14 or later.
+The project uses Swift Package Manager. The macOS app requires macOS 14 or later, and the iPhone app requires iOS 17 or later.
 
 ```bash
 swift run Xvideo
@@ -46,6 +47,28 @@ The build script creates:
 
 ```text
 .build/app/Xvideo.app
+```
+
+## Build The iPhone App Bundle
+
+```bash
+./Scripts/build_ios_app.sh
+```
+
+The script creates:
+
+```text
+.build/ios-device/Xvideo.app
+```
+
+Installing on a physical iPhone requires a valid Apple Development signing certificate in the local keychain and a provisioning profile that matches `IOS_BUNDLE_ID`:
+
+```bash
+IOS_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" \
+IOS_PROVISIONING_PROFILE="/path/to/profile.mobileprovision" \
+./Scripts/build_ios_app.sh
+
+IOS_DEVICE_ID="<paired-device-id>" ./Scripts/install_ios_app.sh
 ```
 
 ## Project Structure

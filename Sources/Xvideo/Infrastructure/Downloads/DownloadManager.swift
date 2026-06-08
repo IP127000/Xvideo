@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import Foundation
 
 @MainActor
@@ -34,8 +36,12 @@ final class DownloadManager: NSObject, ObservableObject {
     }
 
     func reveal(_ task: DownloadTaskInfo) {
+        #if os(macOS)
         guard let localURL = task.localURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([localURL])
+        #else
+        _ = task
+        #endif
     }
 
     private func updateTask(id: UUID, _ update: (inout DownloadTaskInfo) -> Void) {
@@ -44,8 +50,13 @@ final class DownloadManager: NSObject, ObservableObject {
     }
 
     private func destinationURL(for title: String, sourceURL: URL) -> URL {
+        #if os(macOS)
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
         let directory = downloads.appendingPathComponent("Xvideo", isDirectory: true)
+        #else
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let directory = documents.appendingPathComponent("Xvideo", isDirectory: true)
+        #endif
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         let ext = sourceURL.pathExtension.nilIfBlank ?? "mp4"

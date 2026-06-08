@@ -12,6 +12,30 @@ struct ContentView: View {
     @State private var route: ContentRoute = .browse
 
     var body: some View {
+        #if os(iOS)
+        PhoneContentView(
+            searchDraft: $searchDraft,
+            selectedPlaybackSourceID: $selectedPlaybackSourceID,
+            selectedEpisode: $selectedEpisode,
+            pendingWatchProgress: $pendingWatchProgress,
+            openMovie: openMovie,
+            openFavorite: openFavorite,
+            openProgress: openProgress,
+            playFavorite: playFavorite,
+            playProgress: playProgress,
+            playMovie: playMovie
+        )
+        .preferredColorScheme(.dark)
+        .onChange(of: library.selectedMovie?.id) { _, _ in
+            selectPreferredPlayback(for: library.selectedMovie)
+        }
+        .onChange(of: library.detailMovie?.id) { _, _ in
+            selectPreferredPlayback(for: library.detailMovie ?? library.selectedMovie)
+        }
+        .onChange(of: library.searchText) { _, newValue in
+            searchDraft = newValue
+        }
+        #else
         ZStack(alignment: .bottomTrailing) {
             CinemaTheme.appBackground
                 .ignoresSafeArea()
@@ -67,6 +91,7 @@ struct ContentView: View {
             route = .browse
         }
         .animation(.easeInOut(duration: 0.22), value: route)
+        #endif
     }
 
     private func selectPreferredPlayback(for movie: VodItem?) {

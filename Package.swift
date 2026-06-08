@@ -5,7 +5,8 @@ import PackageDescription
 let package = Package(
     name: "Xvideo",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v14),
+        .iOS(.v17)
     ],
     products: [
         .executable(name: "Xvideo", targets: ["Xvideo"])
@@ -19,8 +20,9 @@ let package = Package(
             ],
             linkerSettings: [
                 .linkedFramework("AVKit"),
-                .linkedFramework("AppKit"),
-                .linkedFramework("WebKit")
+                .linkedFramework("WebKit"),
+                .linkedFramework("AppKit", .when(platforms: [.macOS])),
+                .linkedFramework("UIKit", .when(platforms: [.iOS]))
             ]
         )
     ]

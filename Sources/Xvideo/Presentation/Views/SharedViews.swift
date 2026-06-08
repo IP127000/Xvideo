@@ -1,5 +1,9 @@
-import AppKit
 import SwiftUI
+#if os(macOS)
+import AppKit
+#elseif os(iOS)
+import UIKit
+#endif
 
 struct PosterView: View {
     @EnvironmentObject private var library: LibraryViewModel
@@ -11,8 +15,8 @@ struct PosterView: View {
     var body: some View {
         Group {
             if let localURL = library.cachedPosterFileURL(for: url),
-               let image = NSImage(contentsOf: localURL) {
-                Image(nsImage: image)
+               let image = platformImage(from: localURL) {
+                image
                     .resizable()
                     .scaledToFill()
             } else if let url {
@@ -47,6 +51,16 @@ struct PosterView: View {
                 .font(.title)
                 .foregroundStyle(CinemaTheme.textTertiary)
         }
+    }
+
+    private func platformImage(from localURL: URL) -> Image? {
+        #if os(macOS)
+        guard let image = NSImage(contentsOf: localURL) else { return nil }
+        return Image(nsImage: image)
+        #elseif os(iOS)
+        guard let image = UIImage(contentsOfFile: localURL.path) else { return nil }
+        return Image(uiImage: image)
+        #endif
     }
 }
 
@@ -99,10 +113,15 @@ struct DownloadShelfView: View {
                                 .lineLimit(1)
                             Spacer()
                             if task.status == .finished {
+                                #if os(macOS)
                                 Button("显示") {
                                     downloads.reveal(task)
                                 }
                                 .buttonStyle(.borderless)
+                                #else
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(CinemaTheme.teal)
+                                #endif
                             }
                         }
                         ProgressView(value: task.progress)

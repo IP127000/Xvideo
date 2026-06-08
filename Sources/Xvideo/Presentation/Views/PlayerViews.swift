@@ -1,6 +1,11 @@
 import AVKit
 import SwiftUI
 import WebKit
+#if os(macOS)
+import AppKit
+#elseif os(iOS)
+import UIKit
+#endif
 
 struct PlayerPanel: View {
     let movie: VodItem
@@ -30,9 +35,9 @@ struct PlayerPanel: View {
             if let episode {
                 Group {
                     if usesWebPlayer(episode.url) {
-                        MacWebVideoPlayer(url: episode.url)
+                        PlatformWebVideoPlayer(url: episode.url)
                     } else {
-                        MacVideoPlayer(
+                        PlatformVideoPlayer(
                             player: queuePlayer.player,
                             skipBackward: skipBackwardFromPlayer,
                             skipForward: skipForwardFromPlayer
@@ -126,6 +131,7 @@ struct PlayerPanel: View {
                 .help(nextEpisode.map { "播放下一集：\($0.title)" } ?? "没有下一集")
                 .instantTooltip(nextEpisode.map { "下一集：\($0.title)" } ?? "没有下一集")
 
+                #if os(macOS)
                 Button {
                     syncNavigationState()
                     if usesWebPlayer(episode.url) {
@@ -142,6 +148,7 @@ struct PlayerPanel: View {
                 .accessibilityLabel("打开播放窗口")
                 .help("打开播放窗口")
                 .instantTooltip("打开播放窗口")
+                #endif
             }
             .buttonStyle(.plain)
             .foregroundStyle(.white)
@@ -463,6 +470,7 @@ private final class QueuePlaybackController: ObservableObject {
     }
 }
 
+#if os(macOS)
 private struct MacVideoPlayer: NSViewRepresentable {
     let player: AVPlayer
     let skipBackward: () -> Void
@@ -761,6 +769,7 @@ private struct MacWebVideoPlayer: NSViewRepresentable {
         nsView.loadHTMLString("", baseURL: nil)
     }
 
+    @MainActor
     static func makeConfiguration() -> WKWebViewConfiguration {
         let configuration = WKWebViewConfiguration()
         configuration.allowsAirPlayForMediaPlayback = true
@@ -781,6 +790,80 @@ private struct MacWebVideoPlayer: NSViewRepresentable {
     }
 }
 
+private typealias PlatformVideoPlayer = MacVideoPlayer
+private typealias PlatformWebVideoPlayer = MacWebVideoPlayer
+#elseif os(iOS)
+private struct PlatformVideoPlayer: UIViewControllerRepresentable {
+    let player: AVPlayer
+    let skipBackward: () -> Void
+    let skipForward: () -> Void
+
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        let controller = AVPlayerViewController()
+        controller.player = player
+        controller.videoGravity = .resizeAspect
+        controller.allowsPictureInPicturePlayback = true
+        controller.updatesNowPlayingInfoCenter = false
+        return controller
+    }
+
+    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
+        if controller.player !== player {
+            controller.player = player
+        }
+    }
+
+    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: ()) {
+        controller.player = nil
+    }
+}
+
+private struct PlatformWebVideoPlayer: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> WKWebView {
+        let webView = WKWebView(frame: .zero, configuration: Self.makeConfiguration())
+        webView.allowsBackForwardNavigationGestures = false
+        webView.isOpaque = false
+        webView.backgroundColor = .black
+        webView.scrollView.backgroundColor = .black
+        webView.load(Self.request(for: url))
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        guard webView.url != url else { return }
+        webView.load(Self.request(for: url))
+    }
+
+    static func dismantleUIView(_ webView: WKWebView, coordinator: ()) {
+        webView.stopLoading()
+        webView.loadHTMLString("", baseURL: nil)
+    }
+
+    @MainActor
+    static func makeConfiguration() -> WKWebViewConfiguration {
+        let configuration = WKWebViewConfiguration()
+        configuration.allowsAirPlayForMediaPlayback = true
+        configuration.allowsInlineMediaPlayback = true
+        configuration.mediaTypesRequiringUserActionForPlayback = []
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
+        return configuration
+    }
+
+    static func request(for url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 35
+        request.setValue(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            forHTTPHeaderField: "User-Agent"
+        )
+        request.setValue(url.deletingLastPathComponent().absoluteString, forHTTPHeaderField: "Referer")
+        return request
+    }
+}
+#endif
+
 @MainActor
 private final class PlaybackNavigationState: ObservableObject {
     @Published var currentEpisode: Episode?
@@ -794,6 +877,7 @@ private final class PlaybackNavigationState: ObservableObject {
     var skipForward: () -> Void = {}
 }
 
+#if os(macOS)
 private struct FullscreenVideoPlayerContent: View {
     let player: AVPlayer
     @ObservedObject var navigationState: PlaybackNavigationState
@@ -1025,3 +1109,4 @@ private final class FullscreenWebPlayerWindow: NSObject, NSWindowDelegate {
         Self.current = nil
     }
 }
+#endif

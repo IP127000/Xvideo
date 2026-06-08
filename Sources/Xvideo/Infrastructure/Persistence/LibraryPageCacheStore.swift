@@ -52,8 +52,7 @@ actor LibraryPageCacheStore {
     private let decoder: JSONDecoder
 
     init(fileManager: FileManager = .default) {
-        let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        let baseURL = AppStorageDirectory.applicationSupport(fileManager: fileManager)
         let directoryURL = baseURL.appendingPathComponent("Xvideo", isDirectory: true)
         self.directoryURL = directoryURL
 

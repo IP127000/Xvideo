@@ -2,7 +2,7 @@
 
 [中文](README.md) | [English](README.en.md)
 
-Xvideo 是一个原生 macOS 影视客户端，用 SwiftUI 写界面，通过用户配置的媒体 API 拉取影片列表、详情和播放地址。
+Xvideo 是一个原生 macOS 影视客户端，用 SwiftUI 写界面，通过用户配置的媒体 API 拉取影片列表、详情和播放地址。`ios` 分支同时提供 iPhone 触屏入口，复用同一套数据源、片库、详情、播放、收藏和继续观看能力。
 
 项目现在主要围绕日常观看体验在迭代：浏览分类、搜索影片、查看详情、切换剧集、记录本地追番进度、收藏常看的内容，以及在本地播放器里播放视频。
 
@@ -26,10 +26,11 @@ Xvideo 是一个原生 macOS 影视客户端，用 SwiftUI 写界面，通过用
 - 播放剧集时会在本地记录观看进度，可从“继续观看”恢复上次剧集和播放时间
 - 收藏影片会记录所属数据源，并可在“我的收藏”里点击或双击进入播放器继续观看
 - 下载可用的 mp4 资源到 `~/Downloads/Xvideo`
+- iPhone 版提供片库、搜索、收藏、继续观看和视频源五个底部标签入口
 
 ## 运行
 
-本项目使用 Swift Package Manager，最低支持 macOS 14。
+本项目使用 Swift Package Manager。macOS 版最低支持 macOS 14，iPhone 版最低支持 iOS 17。
 
 ```bash
 swift run Xvideo
@@ -46,6 +47,28 @@ open .build/app/Xvideo.app
 
 ```text
 .build/app/Xvideo.app
+```
+
+## 构建 iPhone App 包
+
+```bash
+./Scripts/build_ios_app.sh
+```
+
+脚本会生成：
+
+```text
+.build/ios-device/Xvideo.app
+```
+
+安装到真机需要本机钥匙串里有可用的 Apple Development 签名证书，并提供匹配 `IOS_BUNDLE_ID` 的 provisioning profile：
+
+```bash
+IOS_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" \
+IOS_PROVISIONING_PROFILE="/path/to/profile.mobileprovision" \
+./Scripts/build_ios_app.sh
+
+IOS_DEVICE_ID="<paired-device-id>" ./Scripts/install_ios_app.sh
 ```
 
 ## 项目结构

@@ -1,13 +1,16 @@
 import CryptoKit
 import Foundation
+#if os(macOS)
 import AppKit
+#elseif os(iOS)
+import UIKit
+#endif
 
 actor PosterCacheStore {
     private let directoryURL: URL
 
     init(fileManager: FileManager = .default) {
-        let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        let baseURL = AppStorageDirectory.applicationSupport(fileManager: fileManager)
         directoryURL = baseURL
             .appendingPathComponent("Xvideo", isDirectory: true)
             .appendingPathComponent("posters", isDirectory: true)
@@ -53,7 +56,7 @@ actor PosterCacheStore {
                               (200..<300).contains(httpResponse.statusCode),
                               httpResponse.mimeType?.hasPrefix("image/") == true,
                               !data.isEmpty,
-                              NSImage(data: data) != nil else {
+                              Self.isValidImageData(data) else {
                             return nil
                         }
                         try data.write(to: destinationURL, options: [.atomic])
@@ -78,5 +81,13 @@ actor PosterCacheStore {
         let fileName = digest.map { String(format: "%02x", $0) }.joined()
         let fileExtension = url.pathExtension.nilIfBlank ?? "jpg"
         return directoryURL.appendingPathComponent(fileName).appendingPathExtension(fileExtension)
+    }
+
+    private static func isValidImageData(_ data: Data) -> Bool {
+        #if os(macOS)
+        NSImage(data: data) != nil
+        #elseif os(iOS)
+        UIImage(data: data) != nil
+        #endif
     }
 }
