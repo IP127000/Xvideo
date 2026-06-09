@@ -60,7 +60,7 @@ Sources/Xvideo
 └── Shared               # 通用扩展
 ```
 
-更细的设计说明放在 [Docs/Architecture.md](Docs/Architecture.md)。
+开发流程、分层约定和验证规则放在 [AGENTS.md](AGENTS.md) 与 [Docs/Workflow/](Docs/Workflow/)。
 
 ## 说明
 

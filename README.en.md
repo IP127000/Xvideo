@@ -60,7 +60,7 @@ Sources/Xvideo
 └── Shared               # Shared extensions
 ```
 
-More architecture notes are available in [Docs/Architecture.md](Docs/Architecture.md).
+Development workflow, layer guidance, and verification rules are available in [AGENTS.md](AGENTS.md) and [Docs/Workflow/](Docs/Workflow/).
 
 ## Notes
 
