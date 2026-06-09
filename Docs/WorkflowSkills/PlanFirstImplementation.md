@@ -30,6 +30,7 @@ Use this skill for every code or script change on the `ios` branch.
 5. Add focused checks when practical.
    - Use direct tests or lightweight command checks for domain/data logic.
    - Move to `Xvideo iPhone Acceptance` when the change affects real iPhone workflows.
+6. After verified code or script changes, move to `Xvideo iOS Publish and Package` unless the user explicitly asked not to submit the code or GitHub access is blocked.
 
 ## Skip Rules
 
@@ -39,4 +40,4 @@ Use this skill for every code or script change on the `ios` branch.
 
 ## Output
 
-Report the implementation scope, iOS compile result when code changed, focused checks run, and any skipped checks with reasons.
+Report the implementation scope, iOS compile result when code changed, focused checks run, publication handoff for verified code/script changes, and any skipped checks with reasons.

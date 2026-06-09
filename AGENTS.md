@@ -22,8 +22,10 @@ Follow the workflow below for project changes on the `ios` branch. Scale the che
    - Use `apply_patch` for manual edits.
 4. Verify proportionally.
    - Compile and test what the change can realistically affect.
-   - Use physical iPhone acceptance for high-risk or phone-only user-visible flows when a paired trusted device is available.
+   - Use iOS Simulator or browser-backed simulator tooling as the default surface for full functional UI validation after user-visible changes.
+   - Use a physical iPhone for signed install confirmation when a paired trusted device is available; treat launch as an optional command-side smoke check only when the install tool performs it or the change specifically needs it.
    - Mark unavailable device, signing, or trust conditions as blocked acceptance, not as code failures.
+   - After validation, close Simulator sessions and clean temporary validation artifacts. Keep only explicitly requested release/distribution files.
 5. Keep private details out of committed text.
    - Do not record concrete private source names, source URLs, credentials, personal device-owner details, or private test data in docs, acceptance notes, commits, or release notes.
 
@@ -32,10 +34,10 @@ Follow the workflow below for project changes on the `ios` branch. Scale the che
 Use project-local workflow skills first, then tool/plugin skills only when they directly fit the selected level.
 
 - Use iOS-specific skills and tools for SwiftUI, Simulator, App Intents, iOS performance, iOS memory, signing, install, and device debugging.
-- Use simulator or browser-backed iOS tooling for UI evidence only when it faithfully represents the iPhone behavior under test.
-- Use physical iPhone acceptance for playback, web playback, signing/install, persistence across launches, downloads, and source-management flows when the risk justifies it and a paired trusted device is available.
+- Use simulator or browser-backed iOS tooling for functional UI evidence when it faithfully represents the iPhone behavior under test. Prefer this for source management, browsing, search, detail, playback controls, fullscreen, favorites, continue watching, downloads, and persistence flows.
+- Use physical iPhone acceptance for signed install only by default. Treat launch/process checks as optional command-side smoke evidence, not as functional phone testing. Do not use the phone for exhaustive manual UI click-through unless the user explicitly requests physical UI confirmation or the behavior is device-only.
 - Do not use non-iOS app skills, desktop build scripts, desktop Computer Use, or non-iOS release habits as substitutes for iOS validation.
-- Use GitHub or publishing skills only when the user asks to inspect PR/CI state, commit, push, publish, package, or open a PR.
+- Use GitHub or publishing skills after verified code or script changes so the change is submitted to GitHub, unless the user explicitly asks not to publish or GitHub access is blocked. Documentation-only workflow edits still do not require publication unless requested.
 - Treat `Docs/AnimekoAlignmentPlan.md` as product-direction context only; it does not define independent gates outside this file.
 
 ## Workflow Levels
@@ -77,9 +79,11 @@ Use for iPhone UI, playback, source management, search/browse, favorites, contin
 - Update `Docs/FeatureList.md` for durable product behavior changes.
 - Create or update `Docs/Acceptance/<feature-slug>.md` when the behavior needs user-flow validation.
 - Run the iOS compile gate.
-- Use simulator/UI tooling when it faithfully represents the behavior.
-- Use `Xvideo iPhone Acceptance` for flows where device behavior matters, especially playback, web playback, signing/install, persistence across launches, downloads, and source-management flows.
-- If physical UI automation is unavailable, ask only for the smallest necessary on-phone confirmation and mark the item pending or blocked until observed.
+- Use iOS Simulator or browser-backed simulator tooling for full functional validation when it faithfully represents the behavior.
+- Use `Xvideo iPhone Acceptance` for the signed app install gate. If the install script launches the app, record launch/process state only as command-side smoke evidence.
+- Do not ask for physical phone UI click-through by default. Ask for the smallest necessary on-phone confirmation only when the flow is device-only or the user explicitly requested physical UI validation.
+- After simulator validation, stop the app, close or shut down the simulator used for testing, stop mirror/helper processes, and remove temporary servers, mock data, screenshots, logs, and generated validation files unless they are explicit release artifacts.
+- When code or scripts changed, follow `Xvideo iOS Publish and Package` after verification unless the user explicitly asked not to submit the code.
 
 ### Level 3: iOS Signing, Install, Device, or Distribution Workflow
 
@@ -92,12 +96,13 @@ Use when scripts, signing, install, bundle identifiers, entitlements, provisioni
   ```bash
   IOS_DEVICE_UDID="<iphone-udid>" Scripts/build_ios_xcode_app.sh
   ```
-- Install and launch on a paired trusted device when available:
+- Install on a paired trusted device when available. The install script may also launch the app; use that only as command-side smoke evidence, not full phone UI testing:
   ```bash
   IOS_DEVICE_ID="<paired-device-id>" Scripts/install_ios_app.sh
   ```
-- Confirm installed and running state with `devicectl` when launch succeeds.
-- Document blockers precisely: no device, locked device, Developer Mode disabled, untrusted developer profile, missing signing identity, unavailable provisioning, or launch failure.
+- Confirm installed app state with `devicectl`; check running state only when the install command or task intentionally launches the app.
+- Document blockers precisely: no device, locked device, Developer Mode disabled, untrusted developer profile, missing signing identity, unavailable provisioning, or launch failure when launch was part of the command path.
+- Clean generated signing/install intermediates after verification unless they are explicit release artifacts requested by the user.
 - Do not create distribution artifacts, publish packages, or update releases unless explicitly requested.
 
 ## Project-Local Workflow Skills
@@ -157,6 +162,7 @@ Steps:
 5. Add focused checks for changed logic when practical.
    - Use direct tests or lightweight command checks for domain/data logic.
    - Move to `Xvideo iPhone Acceptance` when the change affects real iPhone workflows.
+6. After verified code or script changes, move to `Xvideo iOS Publish and Package` unless the user explicitly asked not to submit the code or GitHub access is blocked.
 
 ### Skill: Xvideo iPhone Acceptance
 
@@ -164,32 +170,40 @@ Use after meaningful iPhone user-visible changes and after signing/install workf
 Full checklist: `Docs/WorkflowSkills/IPhoneAcceptance.md`.
 
 Purpose:
-- Validate the real iOS build, signing, install, launch, and user-flow path when it matters.
+- Validate the iOS build, Simulator user-flow path, physical iPhone install path, and cleanup state when it matters.
 - Produce a pass/fail/blocked acceptance result tied to `Docs/FeatureList.md`.
 
 Steps:
-1. Prepare the signed iPhone app when a real device check is needed:
+1. Decide the acceptance surface.
+   - Use iOS Simulator or browser-backed iOS UI tooling for full functional flows when it faithfully represents the requested iPhone behavior.
+   - Use a physical iPhone only for signed install and command-side device state by default.
+   - Use physical phone UI click-through only when the user explicitly requests it or when the behavior is device-only.
+2. Run Simulator functional validation for meaningful user-visible behavior.
+   - Cover the actual tap, input, scroll, playback, persistence, download, source-management, or navigation path.
+   - Use the user-provided source when safe, and use local mock sources only for gaps such as download fields that the provided source cannot exercise.
+   - Record evidence without private source names, concrete source URLs, credentials, or personal device details.
+3. Prepare the signed iPhone app when a real device install check is needed:
    ```bash
    IOS_DEVICE_UDID="<iphone-udid>" Scripts/build_ios_xcode_app.sh
    ```
    The script generates a temporary Xcode project under `.build/ios-xcode`, signs with the local Apple Development team, and copies the signed app to `.build/ios-device/Xvideo.app`.
-2. Install and launch on the paired iPhone when available:
+4. Install on the paired iPhone when available. The current install script may launch the app; use launch only as command-side smoke evidence:
    ```bash
    IOS_DEVICE_ID="<paired-device-id>" Scripts/install_ios_app.sh
    ```
-3. Verify command-side device state when launch succeeds:
+5. Verify command-side device state after install, and process state only when launch was part of the command path:
    ```bash
    xcrun devicectl device info apps --device "<paired-device-id>"
    xcrun devicectl device info processes --device "<paired-device-id>"
    ```
-4. Verify user-visible flows.
-   - Prefer simulator/browser/UI tools only when they represent the requested iPhone behavior well.
-   - For physical-device-only checks, ask the user for the smallest necessary confirmation.
+6. Mark each checklist item.
+   - For physical-device-only checks or explicit physical UI requests, ask the user for the smallest necessary confirmation.
    - Mark each checklist item pass, fail, blocked, pending, or not applicable.
-5. Update the acceptance document when one exists.
+7. Update the acceptance document when one exists.
    - Include concise evidence: command, outcome, signed app path, device-state result, tested workflow, and observed result.
    - End with `Accepted`, `Rejected`, or `Blocked`.
-6. If acceptance fails because of code behavior, fix and repeat the relevant build/install/acceptance checks.
+8. If acceptance fails because of code behavior, fix and repeat the relevant build, Simulator validation, install, and acceptance checks.
+9. After simulator or browser-backed validation, stop the app, close or shut down the simulator, stop simulator mirror/helper processes, and remove temporary mock servers, generated test data, screenshots, logs, and build products unless they are explicit release artifacts.
 
 ### Skill: Xvideo iOS Documentation
 
@@ -209,7 +223,7 @@ Steps:
 
 ### Skill: Xvideo iOS Publish and Package
 
-Use only when the user asks to commit, push, publish, package, or prepare release artifacts, or when a task explicitly includes repository publication.
+Use after verified code or script changes, when the user asks to commit, push, publish, package, or prepare release artifacts, or when a task explicitly includes repository publication.
 Full checklist: `Docs/WorkflowSkills/PublishAndPackage.md`.
 
 Purpose:
@@ -225,7 +239,7 @@ Steps:
    - `refactor:` internal structure changes without behavior changes
    - `docs:` documentation-only changes
    - `chore:` tooling, scripts, repository setup
-4. Push only after the commit succeeds and the user requested publication.
+4. Push after the commit succeeds for verified code or script changes unless the user explicitly asked not to publish or GitHub access is blocked.
 5. Do not update GitHub Releases or prepare distribution artifacts unless the user explicitly asks for iOS distribution work.
 6. Treat signed `.app` bundles as local development artifacts unless the user asks for an iOS distribution package.
 
@@ -247,9 +261,12 @@ Steps:
    - Commands run and outcomes.
    - Checks skipped and why.
    - Physical iPhone UI items that remain blocked or pending.
+   - Simulator/browser validation performed and cleanup performed.
+   - Temporary artifacts kept or removed, and why.
 5. Report publish/package status only when relevant:
-   - Not performed unless the user asked.
-   - Completed iOS publication steps when the user requested them.
+   - Completed GitHub publication for code or script changes.
+   - Not performed for documentation-only changes unless the user asked.
+   - Blocked publication, with the reason.
 
 ## Common Paths
 
@@ -259,9 +276,10 @@ Steps:
 2. `Xvideo iOS Feature Intake`.
 3. `Xvideo iOS Plan-First Implementation`.
 4. `Xvideo iOS Documentation`.
-5. `Xvideo iPhone Acceptance` when the behavior requires real-flow validation.
-6. `Xvideo iOS Publish and Package` only if the user asks to publish.
-7. `Xvideo iOS Closeout`.
+5. `Xvideo iPhone Acceptance`, using Simulator/browser tooling for full functional validation and physical iPhone for signed install confirmation.
+6. Cleanup: close Simulator, stop helper processes, and remove temporary validation artifacts except explicit release artifacts.
+7. `Xvideo iOS Publish and Package` when code or scripts changed, unless the user explicitly asked not to publish.
+8. `Xvideo iOS Closeout`.
 
 ### Documentation-Only or Workflow-Only Change
 
@@ -278,17 +296,22 @@ Steps:
 2. `Xvideo iOS Plan-First Implementation`.
 3. Run the iOS compile gate.
 4. Run focused tests/checks when practical.
-5. Use `Xvideo iPhone Acceptance` only if behavior can change from the user's perspective.
-6. `Xvideo iOS Publish and Package` only if the user asks to publish.
-7. `Xvideo iOS Closeout`.
+5. Use Simulator/browser functional validation only if behavior can change from the user's perspective.
+6. Cleanup simulator/helper/temp artifacts when validation used them.
+7. `Xvideo iOS Publish and Package` when code or scripts changed, unless the user explicitly asked not to publish.
+8. `Xvideo iOS Closeout`.
 
 ### Emergency Fix
 
 1. Keep the plan short.
 2. Preserve the architecture boundary.
 3. Compile and run the smallest meaningful check.
-4. Update `Docs/FeatureList.md` and acceptance docs only when user-visible iOS behavior changed.
-5. `Xvideo iOS Closeout`.
+4. Use Simulator/browser validation for the smallest meaningful user flow when the fix is visible.
+5. Install the fixed app on the physical iPhone for signed install confirmation when signing is available.
+6. Cleanup simulator/helper/temp artifacts after validation.
+7. Publish verified code/script fixes to GitHub unless the user explicitly asked not to publish or access is blocked.
+8. Update `Docs/FeatureList.md` and acceptance docs only when user-visible iOS behavior changed.
+9. `Xvideo iOS Closeout`.
 
 ## Project Rules
 
@@ -297,7 +320,8 @@ Steps:
 - Signed iPhone app path: `.build/ios-device/Xvideo.app`.
 - iOS automatic-signing build script: `Scripts/build_ios_xcode_app.sh`.
 - iOS manual/ad-hoc build script: `Scripts/build_ios_app.sh`.
-- iOS install/launch script: `Scripts/install_ios_app.sh`.
+- iOS install script: `Scripts/install_ios_app.sh` currently installs and then launches as a command-side smoke check.
 - Non-iOS app build scripts, packages, UI acceptance, and releases are out of scope unless the user explicitly asks for a non-iOS task.
 - Do not include concrete private data source names, source URLs, credentials, device owner personal details, or private testing details in committed docs or release notes.
 - Do not use destructive git commands or revert user changes unless explicitly requested.
+- After validation, clean temporary simulator mirrors, local mock servers, generated UI-test data, screenshots, logs, DerivedData, and non-release build outputs when practical. Keep only explicit release/distribution artifacts requested by the user.
