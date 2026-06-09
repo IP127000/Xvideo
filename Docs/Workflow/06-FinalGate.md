@@ -16,14 +16,15 @@ Leave the repository in a clear, explainable state and tell the user what was ve
    - Feature, architecture guidance, workflow, and acceptance docs updated where relevant.
 3. Summarize verification status.
    - List commands run and outcomes.
-   - Include `swift build` for code changes.
-   - Include `Scripts/build_app.sh` and macOS Acceptance for user-visible app changes.
+   - Include `npm test` when logic, parsing, state, or persistence changed.
+   - Include `npm run build` for code changes.
+   - Include Web Acceptance for user-visible app changes.
    - State skipped checks and why.
 4. Summarize release/GitHub status.
    - Release updated, package created, commit pushed, or PR opened when requested.
    - Otherwise state that publishing/release was not run because it was not requested.
 5. Call out residual risk.
-   - Mention blocked tests, unavailable Computer Use, missing test data, or private-source-dependent behavior.
+   - Mention blocked tests, unavailable Browser/Playwright, missing test data, private-source-dependent behavior, CORS/proxy limitations, media codec limitations, or browser download constraints.
 
 ## Done When
 

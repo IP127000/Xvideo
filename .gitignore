@@ -1,8 +1,4 @@
+node_modules/
+dist/
+tsconfig.tsbuildinfo
 .DS_Store
-.build/
-.swiftpm/
-DerivedData/
-*.xcuserdata/
-*.xcuserstate
-*.xcodeproj/project.xcworkspace/xcuserdata/
-*.xcodeproj/xcuserdata/

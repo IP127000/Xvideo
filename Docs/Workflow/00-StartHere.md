@@ -13,7 +13,7 @@ Understand the repository state, classify the request, and protect unrelated wor
    - Confirm the current branch, upstream state, remote, and recent commits when the task involves changes that may be committed, pushed, or released.
    - Note untracked or modified files that are not part of the task.
 2. Classify the request.
-   - User-visible feature or bug fix.
+   - User-visible Web feature or bug fix.
    - Internal refactor.
    - Documentation-only change.
    - Packaging, GitHub, or release task.
@@ -21,7 +21,7 @@ Understand the repository state, classify the request, and protect unrelated wor
 3. Read the relevant context.
    - Read `Docs/FeatureList.md` for product behavior changes.
    - Read the architecture reminders in `AGENTS.md` before structure, data flow, packaging, or release changes.
-   - Read nearby SwiftUI, AppKit, Domain, Data, Infrastructure, or App files before planning code edits.
+   - Read nearby React components, hooks, services, tests, styles, and Vite config before planning code edits.
    - For workflow/process changes, read `AGENTS.md` and the relevant `Docs/Workflow/*.md` files first.
 4. Protect user work.
    - Do not revert unrelated edits.

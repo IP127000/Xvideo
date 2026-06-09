@@ -6,12 +6,13 @@ Do not run this step as a side effect of ordinary implementation work.
 
 ## Purpose
 
-Ship a verified macOS app package and keep GitHub state consistent when release or publishing work is requested.
+Ship a verified Web app build and keep GitHub state consistent when release or publishing work is requested.
 
 ## Prerequisites
 
-- Code changes have passed `swift build`.
-- User-visible app changes have passed `Scripts/build_app.sh` and macOS Acceptance, or any blocked acceptance is clearly documented.
+- Code changes have passed `npm test` where relevant.
+- Code changes have passed `npm run build`.
+- User-visible app changes have passed Web Acceptance, or any blocked acceptance is clearly documented.
 - `Docs/Acceptance/` has a final conclusion when formal acceptance was required.
 - README, feature, architecture, and workflow docs are aligned where relevant.
 
@@ -32,14 +33,15 @@ Ship a verified macOS app package and keep GitHub state consistent when release 
 3. Push or create a PR when requested.
    - Confirm the branch and remote before pushing.
    - Do not push unrelated local work.
-4. Package the app when requested.
-   - Run `Scripts/build_app.sh` first.
-   - Use date-only release tags such as `2026-06-08`.
-   - Build asset name: `Xvideo-YYYY-MM-DD-macOS.zip`.
+4. Package the Web app when requested.
+   - Run `npm test` when relevant.
+   - Run `npm run build`.
+   - Use date-only release tags such as `2026-06-09`.
+   - Build asset name: `Xvideo-Web-YYYY-MM-DD.zip`.
    - Package command:
 
      ```bash
-     ditto -c -k --sequesterRsrc --keepParent .build/app/Xvideo.app .build/releases/Xvideo-YYYY-MM-DD-macOS.zip
+     ditto -c -k --keepParent dist .build/releases/Xvideo-Web-YYYY-MM-DD.zip
      ```
 
 5. Compute the asset SHA-256.
@@ -56,5 +58,5 @@ Ship a verified macOS app package and keep GitHub state consistent when release 
 ## Done When
 
 - Requested GitHub actions are complete.
-- Requested app package and release assets are created or updated.
+- Requested Web package and release assets are created or updated.
 - Asset name, SHA-256, verification, and build details are recorded.

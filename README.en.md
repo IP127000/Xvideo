@@ -2,66 +2,72 @@
 
 [中文](README.md) | [English](README.en.md)
 
-Xvideo is a native macOS video client built with SwiftUI. It fetches video lists, details, and playback sources from user-configured media APIs, then presents them in a desktop-style browsing and playback experience.
+Xvideo is a Web media client built with React, Vite, and TypeScript. It loads movie lists, details, and playback URLs from user-configured media collection APIs.
 
-The project is focused on everyday watching: browsing categories, searching titles, reading details, switching episodes, tracking local watch progress, saving favorites, and playing videos inside the app.
-
-## Preview
-
-The main window now uses a two-column cinematic layout: media library, categories, and source management on the left; the upper-right area shows the selected title details, with featured picks and the full catalog below. Clicking a title card opens quick details and refreshes the upper detail panel; double-click a card or choose Start Playback to enter the dedicated player page.
-
-![Xvideo macOS app preview](Docs/images/app-preview-blurred.png)
+The app does not ship with any built-in source. On first use, add your own collection API. Search, playback, and download quality depend on that source.
 
 ## Features
 
-- Browse latest updates and video categories
-- Use a two-column cinematic interface with an inline detail panel and a separate playback page
-- Prioritize favorites in Featured Picks, and browse the full catalog in two-row shuffle batches
+- Browse latest updates, root categories, and child categories
+- Dark cinema-style Web workspace with media navigation and playback/detail views
+- Featured movies prioritize favorites; all movies can rotate in batches
 - Search by title, actor, or keyword
-- View poster, summary, region, year, cast, director, and update status
-- Ships with no built-in data source; add your own collection API before browsing
-- Switch between multiple data and playback sources, including JSON, XML, and flat XML category APIs
-- Jump to the previous or next episode from the player
-- Rewind or fast-forward 15 seconds, and close the playback window with Esc
-- Track local watch progress while episodes play, then resume the last episode and playback time from Continue Watching
-- Favorite videos with their source attached, then click or double-click them in My Favorites to continue watching
-- Download available mp4 resources to `~/Downloads/Xvideo`
+- Filter category browsing by type, year, and area
+- View posters, summaries, metadata, scores, update status, playback sources, and episodes
+- Add, test, enable, switch, and delete multiple user sources
+- Supports JSON, XML, and flat XML category APIs
+- Direct playback through browser video, m3u8 through hls.js, and `/share/` web players through iframe/new-window fallback
+- Previous/next episode and 15-second skip controls
+- Continue-watching records include source, playback source, episode, position, and timestamp
+- Favorites keep source metadata for source-aware restore
+- Browser downloads for direct file resources
+- Sources, favorites, watch progress, and preview cache persist in localStorage
+- Vite dev/preview includes a local proxy for source APIs, playback URL resolution, and media proxying
 
 ## Run
 
-The project uses Swift Package Manager and requires macOS 14 or later.
-
 ```bash
-swift run Xvideo
+npm install
+npm run dev
 ```
 
-## Build The macOS App
-
-```bash
-./Scripts/build_app.sh
-open .build/app/Xvideo.app
-```
-
-The build script creates:
+Default local URL:
 
 ```text
-.build/app/Xvideo.app
+http://127.0.0.1:5173
 ```
 
-## Project Structure
+## Build And Preview
+
+```bash
+npm test
+npm run build
+npm run preview
+```
+
+Build output:
 
 ```text
-Sources/Xvideo
-├── App                  # App entry point and dependency setup
-├── Presentation         # SwiftUI views and view models
-├── Domain               # Models, protocols, and playback parsing
-├── Data                 # API client and repository implementation
-├── Infrastructure       # Downloads, favorites, and local system features
-└── Shared               # Shared extensions
+dist/
 ```
 
-Development workflow, layer guidance, and verification rules are available in [AGENTS.md](AGENTS.md) and [Docs/Workflow/](Docs/Workflow/).
+## Structure
 
-## Notes
+```text
+src
+├── App.tsx
+├── appContext.tsx
+├── components
+├── hooks
+├── services
+├── styles.css
+└── types.ts
+```
 
-The app ships with no built-in data source, and all catalog data comes from user-configured APIs. Playback availability can vary depending on the resource, network environment, and source restrictions. The app validates a data source before enabling it, and keeps the current source active if validation fails. If one playback source does not play, try switching to another playback source first.
+Development workflow and verification rules live in [AGENTS.md](AGENTS.md) and [Docs/Workflow/](Docs/Workflow/).
+
+## Web Notes
+
+- The Web app relies on the local Vite proxy during development/preview. Static deployments need an equivalent proxy for common CORS-restricted sources.
+- Browsers cannot force downloads into `~/Downloads/Xvideo` or reveal files in Finder; downloads use the browser's default behavior.
+- Playback depends on source availability, browser media support, CORS, iframe policy, and codec support.

@@ -9,7 +9,7 @@ Keep user-facing and contributor-facing documentation honest without turning eve
 ## Steps
 
 1. Check README impact.
-   - Update `README.md` when user-visible behavior, setup, build, usage, source handling, screenshots, or release instructions change.
+   - Update `README.md` when user-visible behavior, setup, build, usage, source handling, screenshots, deployment, or release instructions change.
    - Keep `README.en.md` aligned when the same information exists there.
    - If no README update is needed, state the reason in the final response.
 2. Keep product and architecture guidance aligned.
@@ -22,6 +22,8 @@ Keep user-facing and contributor-facing documentation honest without turning eve
 4. Keep acceptance docs factual.
    - Use `Docs/Acceptance/` for meaningful user-facing risk.
    - Avoid private source names, source URLs, credentials, and concrete private testing details.
+5. Keep Web limitations explicit.
+   - Note when a capability depends on browser support, CORS/proxy availability, media codecs, autoplay rules, iframe policies, or browser download behavior.
 
 ## Done When
 

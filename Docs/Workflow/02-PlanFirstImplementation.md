@@ -4,7 +4,7 @@ Use this step for every code change.
 
 ## Purpose
 
-Plan narrowly, implement in the owning layer, and verify compilation before deeper testing.
+Plan narrowly, implement in the owning layer, and verify tests/build before deeper browser testing.
 
 ## Steps
 
@@ -12,30 +12,32 @@ Plan narrowly, implement in the owning layer, and verify compilation before deep
    - Identify the files and layers likely to change.
    - Respect the dependency direction in `AGENTS.md`.
    - Prefer small changes in existing structures over new abstractions.
-   - Keep AppKit interop narrow and localized.
+   - Keep proxy/server behavior narrow and localized to Vite middleware when possible.
 2. Record the plan with Codex's plan mechanism when available.
    - Keep steps concrete and checkable.
    - Update the plan as facts change.
 3. Implement the smallest complete change.
-   - `Domain`: models, repository protocols, business rules, source URL interpretation, and use cases.
-   - `Data`: network clients, API parsing, XML/JSON handling, and repository implementations.
-   - `Infrastructure`: persistence, downloads, filesystem, Finder, and other macOS system services.
-   - `Presentation`: SwiftUI views, observable state, user interaction, layout, focus, and visible error/loading states.
-   - `App`: entry point and dependency assembly.
-4. Apply macOS engineering checks while coding.
-   - Keep UI responsive on the main actor.
-   - Avoid blocking playback, downloads, or network operations on the main thread.
-   - Keep window minimum sizes, keyboard shortcuts, focus, and menu/window behavior stable.
-   - Handle cancellation and stale async results in view models.
-5. Compile after code edits.
-   - Run `swift build`.
-   - Fix compiler errors before app packaging or acceptance work.
+   - `src/types.ts`: shared product contracts.
+   - `src/services`: API parsing, playback parsing, proxy helpers, localStorage adapters, formatting, and focused tests.
+   - `src/hooks`: app state, persistence orchestration, downloads, and view-model-like workflows.
+   - `src/components`: React UI, accessibility, visible states, and user interactions.
+   - `src/styles.css`: design tokens, layout, responsive behavior, and visual states.
+   - `vite.config.ts`: dev/preview proxy and build configuration.
+4. Apply Web engineering checks while coding.
+   - Keep data loading cancellable or guarded against stale results where practical.
+   - Avoid blocking the main thread with large synchronous work in render.
+   - Keep media, downloads, localStorage, and proxy behavior clear about browser limitations.
+   - Keep responsive layouts stable and avoid text overlap or clipped controls.
+5. Verify after code edits.
+   - Run `npm test` when logic, parsing, source handling, state, or persistence changed.
+   - Run `npm run build`.
+   - Fix compiler, test, and bundling errors before browser acceptance.
 6. Add focused checks when practical.
-   - Prefer unit or lightweight command checks for Domain, Data, parsing, and persistence logic.
-   - If adding substantial reusable logic and no test target exists, consider adding a small Swift test target when the risk justifies it.
+   - Prefer Vitest checks for service parsing, source parsing, formatting, and storage-adjacent logic.
+   - Add browser interaction checks for user-visible workflows.
 
 ## Done When
 
 - The implementation is scoped to the request.
-- `swift build` passes for code changes.
+- `npm run build` passes for code changes.
 - Relevant focused checks have passed or skipped checks are explained.
