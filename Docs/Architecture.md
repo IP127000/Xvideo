@@ -35,7 +35,7 @@ App -> Presentation + Data + Domain + Infrastructure
 Infrastructure -> Domain where needed
 ```
 
-`Domain` does not know about SwiftUI, URLSession, UIKit/AppKit windows, or file locations.
+`Domain` does not know about SwiftUI, URLSession, UIKit view controllers, or file locations.
 
 ## Important Use Cases
 
@@ -69,4 +69,4 @@ git add <task-related-files>
 git commit -m "refactor: move library loading rules into domain use cases"
 ```
 
-Do not use `git add .` unless the working tree contains only task-related changes. For larger work, commit the stable baseline first, then commit the refactor or feature separately. Non-iOS builds, packages, UI acceptance, and releases are not default gates on the `ios` branch.
+Do not use `git add .` unless the working tree contains only task-related changes. For larger work, commit the stable baseline first, then commit the refactor or feature separately.

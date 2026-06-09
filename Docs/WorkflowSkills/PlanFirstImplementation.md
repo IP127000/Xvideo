@@ -34,7 +34,7 @@ Use this skill for every code or script change on the `ios` branch.
 ## Skip Rules
 
 - Do not run the compile gate for workflow-only or documentation-only changes unless the docs alter build, signing, install, or distribution instructions and the user wants verification.
-- Do not run macOS app build scripts as default verification for this branch.
+- Do not run non-iOS app build scripts as default verification for this branch.
 - Do not refactor unrelated layers while making a narrow behavior change.
 
 ## Output

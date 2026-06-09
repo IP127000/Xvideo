@@ -19,7 +19,7 @@ Use this skill for new iOS features, iPhone UI behavior, playback behavior, sour
 3. Update `Docs/FeatureList.md` only when durable product behavior changes.
    - Mark planned, in-progress, blocked, or implemented behavior honestly.
    - Remove stale entries only when the code or product decision actually changed.
-   - Keep macOS and desktop-only behavior out of iOS acceptance requirements.
+   - Keep desktop-only behavior out of iOS acceptance requirements.
 4. Create or update `Docs/Acceptance/<feature-slug>.md` when the behavior needs user-flow evidence.
    - Include requirement summary, scope, prerequisites, device/signing assumptions without private details, and a checklist mapped to `Docs/FeatureList.md`.
    - For tiny visible copy/layout changes, use a concise final-response note instead of a new acceptance document.

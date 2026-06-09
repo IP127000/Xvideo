@@ -49,7 +49,7 @@ Record these as blocked acceptance rather than code failures:
 
 ## Skip Rules
 
-- Do not use desktop Computer Use or macOS UI behavior as a substitute for iPhone acceptance.
+- Do not use desktop Computer Use or desktop UI behavior as a substitute for iPhone acceptance.
 - Do not require physical-device acceptance for tiny copy changes, pure internal refactors, or simulator-faithful low-risk UI changes.
 - Do not record concrete private source names, source URLs, credentials, personal device details, or private test data.
 

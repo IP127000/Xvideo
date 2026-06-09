@@ -2,15 +2,9 @@
 
 [中文](README.md) | [English](README.en.md)
 
-The `ios` branch of Xvideo is the native iOS app development branch, with iPhone as the default touch-first product surface. It fetches video lists, details, and playback sources from user-configured media APIs, then reuses the same source, library, detail, playback, favorites, and continue-watching foundations.
+The `ios` branch of Xvideo is the native iOS app development branch, with iPhone as the default touch-first product surface. It fetches video lists, details, and playback sources from user-configured media APIs, then provides library, search, detail, playback, favorites, continue-watching, and basic download flows.
 
-The project is focused on everyday phone watching: browsing categories, searching titles, reading details, switching episodes, tracking local watch progress, saving favorites, and playing videos inside the iPhone player. The repository still keeps the macOS target and shared SwiftUI code, but macOS packaging, acceptance, and release work are not default gates for this branch.
-
-## Preview
-
-The current preview image comes from the shared macOS interface and mainly shows the library/detail foundation. New work on the `ios` branch should treat the iPhone tab interface, touch detail screen, and player as the product source of truth.
-
-![Xvideo macOS app preview](Docs/images/app-preview-blurred.png)
+The project is focused on everyday phone watching: browsing categories, searching titles, reading details, switching episodes, tracking local watch progress, saving favorites, and playing videos inside the iPhone player.
 
 ## Features
 
@@ -26,7 +20,7 @@ The current preview image comes from the shared macOS interface and mainly shows
 - Rewind or fast-forward 15 seconds
 - Track local watch progress while episodes play, then resume the last episode and playback time from Continue Watching
 - Favorite videos with their source attached, then continue watching from My Favorites
-- Save iPhone downloads in the app Documents `Xvideo` folder; the auxiliary macOS target still saves to `~/Downloads/Xvideo`
+- Save downloads in the app Documents `Xvideo` folder
 
 ## Run
 
@@ -70,23 +64,6 @@ For temporary install probing, ad-hoc signing can be attempted. The phone must h
 ```bash
 IOS_AD_HOC_SIGN=1 ./Scripts/build_ios_app.sh
 IOS_ALLOW_AD_HOC=1 IOS_DEVICE_ID="<paired-device-id>" ./Scripts/install_ios_app.sh
-```
-
-## Auxiliary macOS Run Path
-
-The macOS target is still useful for shared-code debugging, but it is not the default acceptance or release path for the `ios` branch.
-
-```bash
-swift run Xvideo
-```
-
-## Auxiliary macOS Build Path
-
-Use this only when desktop target verification is explicitly needed:
-
-```bash
-./Scripts/build_app.sh
-open .build/app/Xvideo.app
 ```
 
 ## Project Structure

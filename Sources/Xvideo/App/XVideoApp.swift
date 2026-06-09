@@ -14,24 +14,10 @@ struct XVideoApp: App {
                 .environmentObject(downloads)
                 .environmentObject(favorites)
                 .environmentObject(watchProgress)
-                #if os(macOS)
-                .frame(minWidth: 1280, minHeight: 780)
-                #endif
                 .task {
                     await library.loadInitialData()
                     library.startPeriodicRefresh()
                 }
         }
-        #if os(macOS)
-        .windowStyle(.titleBar)
-        .commands {
-            CommandGroup(after: .newItem) {
-                Button("刷新") {
-                    Task { await library.refresh() }
-                }
-                .keyboardShortcut("r", modifiers: [.command])
-            }
-        }
-        #endif
     }
 }

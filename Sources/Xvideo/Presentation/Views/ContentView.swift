@@ -5,14 +5,11 @@ struct ContentView: View {
     @EnvironmentObject private var watchProgress: WatchProgressStore
 
     @State private var searchDraft = ""
-    @State private var selectedSection: LibrarySection = .home
     @State private var selectedPlaybackSourceID: PlaybackSource.ID?
     @State private var selectedEpisode: Episode?
     @State private var pendingWatchProgress: WatchProgressItem?
-    @State private var route: ContentRoute = .browse
 
     var body: some View {
-        #if os(iOS)
         PhoneContentView(
             searchDraft: $searchDraft,
             selectedPlaybackSourceID: $selectedPlaybackSourceID,
@@ -35,63 +32,6 @@ struct ContentView: View {
         .onChange(of: library.searchText) { _, newValue in
             searchDraft = newValue
         }
-        #else
-        ZStack(alignment: .bottomTrailing) {
-            CinemaTheme.appBackground
-                .ignoresSafeArea()
-
-            HSplitView {
-                CinematicSidebarView(
-                    searchDraft: $searchDraft,
-                    selectedSection: $selectedSection
-                )
-                .frame(minWidth: 230, idealWidth: 252, maxWidth: 300)
-
-                ZStack {
-                    MediaBrowserView(
-                        searchDraft: $searchDraft,
-                        selectedSection: $selectedSection,
-                        openMovie: openMovie,
-                        openFavorite: openFavorite,
-                        openProgress: openProgress,
-                        playFavorite: playFavorite,
-                        playProgress: playProgress,
-                        playMovie: playMovie
-                    )
-                    .opacity(route == .browse ? 1 : 0)
-                    .allowsHitTesting(route == .browse)
-
-                    if route == .watch {
-                        MovieDetailView(
-                            selectedPlaybackSourceID: $selectedPlaybackSourceID,
-                            selectedEpisode: $selectedEpisode,
-                            dismissToBrowser: { route = .browse }
-                        )
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
-                    }
-                }
-                .frame(minWidth: 780)
-            }
-        }
-        .preferredColorScheme(.dark)
-        .overlay(alignment: .bottomTrailing) {
-            DownloadShelfView()
-                .padding(18)
-        }
-        .onChange(of: library.selectedMovie?.id) { _, _ in
-            selectPreferredPlayback(for: library.selectedMovie)
-        }
-        .onChange(of: library.detailMovie?.id) { _, _ in
-            selectPreferredPlayback(for: library.detailMovie ?? library.selectedMovie)
-        }
-        .onChange(of: library.searchText) { _, newValue in
-            searchDraft = newValue
-        }
-        .onChange(of: selectedSection) { _, _ in
-            route = .browse
-        }
-        .animation(.easeInOut(duration: 0.22), value: route)
-        #endif
     }
 
     private func selectPreferredPlayback(for movie: VodItem?) {
@@ -142,31 +82,23 @@ struct ContentView: View {
     private func playMovie(_ movie: VodItem) {
         Task {
             await library.selectMovie(movie)
-            route = .watch
         }
     }
 
     private func openFavorite(_ favorite: FavoriteMovie) {
         Task {
-            if await library.selectFavorite(favorite) {
-                route = .watch
-            }
+            _ = await library.selectFavorite(favorite)
         }
     }
 
     private func playFavorite(_ favorite: FavoriteMovie) {
-        Task {
-            if await library.selectFavorite(favorite) {
-                route = .watch
-            }
-        }
+        openFavorite(favorite)
     }
 
     private func openProgress(_ progress: WatchProgressItem) {
         pendingWatchProgress = progress
         Task {
             if await library.selectWatchProgress(progress) {
-                route = .watch
                 selectPlayback(from: progress, in: library.detailMovie ?? library.selectedMovie ?? progress.item)
             }
         }
@@ -175,16 +107,4 @@ struct ContentView: View {
     private func playProgress(_ progress: WatchProgressItem) {
         openProgress(progress)
     }
-}
-
-enum LibrarySection: Hashable {
-    case home
-    case favorites
-    case continueWatching
-    case category(Int)
-}
-
-private enum ContentRoute {
-    case browse
-    case watch
 }

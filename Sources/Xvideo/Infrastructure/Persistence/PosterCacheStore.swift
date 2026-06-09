@@ -1,10 +1,6 @@
 import CryptoKit
 import Foundation
-#if os(macOS)
-import AppKit
-#elseif os(iOS)
 import UIKit
-#endif
 
 actor PosterCacheStore {
     private let directoryURL: URL
@@ -84,10 +80,6 @@ actor PosterCacheStore {
     }
 
     private static func isValidImageData(_ data: Data) -> Bool {
-        #if os(macOS)
-        NSImage(data: data) != nil
-        #elseif os(iOS)
         UIImage(data: data) != nil
-        #endif
     }
 }

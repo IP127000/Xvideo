@@ -2,15 +2,9 @@
 
 [中文](README.md) | [English](README.en.md)
 
-Xvideo 的 `ios` 分支是原生 iOS 影视客户端开发分支，默认面向 iPhone 触屏使用。应用通过用户配置的媒体 API 拉取影片列表、详情和播放地址，复用同一套数据源、片库、详情、播放、收藏和继续观看能力。
+Xvideo 的 `ios` 分支是原生 iOS 影视客户端开发分支，默认面向 iPhone 触屏使用。应用通过用户配置的媒体 API 拉取影片列表、详情和播放地址，并提供片库、搜索、详情、播放、收藏、继续观看和基础下载能力。
 
-项目现在主要围绕手机端日常观看体验在迭代：浏览分类、搜索影片、查看详情、切换剧集、记录本地追番进度、收藏常看的内容，以及在 iPhone 播放器里播放视频。仓库仍保留 macOS 目标和共享 SwiftUI 代码，但 macOS 打包、验收和发布不是此分支的默认流程。
-
-## 界面预览
-
-当前预览图来自共享代码中的 macOS 界面，主要用于展示片库和详情能力；`ios` 分支的新开发以 iPhone 底部标签、触屏详情页和播放器为准。
-
-![Xvideo macOS 应用界面预览](Docs/images/app-preview-blurred.png)
+项目现在主要围绕手机端日常观看体验在迭代：浏览分类、搜索影片、查看详情、切换剧集、记录本地追番进度、收藏常看的内容，以及在 iPhone 播放器里播放视频。
 
 ## 主要功能
 
@@ -26,7 +20,7 @@ Xvideo 的 `ios` 分支是原生 iOS 影视客户端开发分支，默认面向 
 - 支持播放器快退/快进 15 秒
 - 播放剧集时会在本地记录观看进度，可从“继续观看”恢复上次剧集和播放时间
 - 收藏影片会记录所属数据源，并可在“我的收藏”里继续观看
-- iPhone 下载文件保存到 App 文档目录下的 `Xvideo` 文件夹；macOS 辅助目标保存到 `~/Downloads/Xvideo`
+- 下载文件保存到 App 文档目录下的 `Xvideo` 文件夹
 
 ## 运行
 
@@ -70,23 +64,6 @@ IOS_DEVICE_ID="<paired-device-id>" ./Scripts/install_ios_app.sh
 ```bash
 IOS_AD_HOC_SIGN=1 ./Scripts/build_ios_app.sh
 IOS_ALLOW_AD_HOC=1 IOS_DEVICE_ID="<paired-device-id>" ./Scripts/install_ios_app.sh
-```
-
-## macOS 辅助运行路径
-
-macOS 目标仍可用于共享代码的本地调试，但它不是 `ios` 分支的默认验收或发布路径。
-
-```bash
-swift run Xvideo
-```
-
-## macOS 辅助打包路径
-
-仅在明确需要验证桌面目标时使用：
-
-```bash
-./Scripts/build_app.sh
-open .build/app/Xvideo.app
 ```
 
 ## 项目结构

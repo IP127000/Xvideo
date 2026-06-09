@@ -34,7 +34,7 @@ Use project-local workflow skills first, then tool/plugin skills only when they 
 - Use iOS-specific skills and tools for SwiftUI, Simulator, App Intents, iOS performance, iOS memory, signing, install, and device debugging.
 - Use simulator or browser-backed iOS tooling for UI evidence only when it faithfully represents the iPhone behavior under test.
 - Use physical iPhone acceptance for playback, web playback, signing/install, persistence across launches, downloads, and source-management flows when the risk justifies it and a paired trusted device is available.
-- Do not use macOS app skills, macOS build scripts, desktop Computer Use, or non-iOS release habits as substitutes for iOS validation.
+- Do not use non-iOS app skills, desktop build scripts, desktop Computer Use, or non-iOS release habits as substitutes for iOS validation.
 - Use GitHub or publishing skills only when the user asks to inspect PR/CI state, commit, push, publish, package, or open a PR.
 - Treat `Docs/AnimekoAlignmentPlan.md` as product-direction context only; it does not define independent gates outside this file.
 
@@ -160,7 +160,7 @@ Steps:
 
 ### Skill: Xvideo iPhone Acceptance
 
-Use after meaningful iPhone user-visible changes and after signing/install workflow changes. Do not use macOS Computer Use as a substitute for iPhone acceptance.
+Use after meaningful iPhone user-visible changes and after signing/install workflow changes. Do not use desktop Computer Use as a substitute for iPhone acceptance.
 Full checklist: `Docs/WorkflowSkills/IPhoneAcceptance.md`.
 
 Purpose:

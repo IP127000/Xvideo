@@ -6,12 +6,7 @@ enum AppStorageDirectory {
             return url
         }
 
-        #if os(macOS)
-        return fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support")
-        #else
         return fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
             ?? fileManager.temporaryDirectory
-        #endif
     }
 }
