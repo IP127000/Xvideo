@@ -79,9 +79,25 @@ extension DownloadManager: URLSessionDownloadDelegate {
         didFinishDownloadingTo location: URL
     ) {
         let taskIdentifier = downloadTask.taskIdentifier
+        let stableLocation = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+
+        do {
+            try FileManager.default.copyItem(at: location, to: stableLocation)
+        } catch {
+            Task { @MainActor in
+                guard let id = taskIDs[taskIdentifier] else { return }
+                updateTask(id: id) {
+                    $0.status = .failed(error.localizedDescription)
+                }
+            }
+            return
+        }
+
         Task { @MainActor in
             guard let id = taskIDs[taskIdentifier],
                   let taskInfo = tasks.first(where: { $0.id == id }) else {
+                try? FileManager.default.removeItem(at: stableLocation)
                 return
             }
 
@@ -89,13 +105,14 @@ extension DownloadManager: URLSessionDownloadDelegate {
             try? FileManager.default.removeItem(at: destination)
 
             do {
-                try FileManager.default.moveItem(at: location, to: destination)
+                try FileManager.default.moveItem(at: stableLocation, to: destination)
                 updateTask(id: id) {
                     $0.progress = 1
                     $0.status = .finished
                     $0.localURL = destination
                 }
             } catch {
+                try? FileManager.default.removeItem(at: stableLocation)
                 updateTask(id: id) {
                     $0.status = .failed(error.localizedDescription)
                 }
