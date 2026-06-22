@@ -1,6 +1,6 @@
 # Xvideo
 
-[中文](README.md) | [English](README.en.md)
+[English](README.md) | [Simplified Chinese](README.zh-CN.md)
 
 Xvideo is a native macOS video client built with SwiftUI. It fetches video lists, details, and playback sources from user-configured media APIs, then presents them in a desktop-style browsing and playback experience.
 

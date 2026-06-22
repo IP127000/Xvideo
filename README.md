@@ -1,67 +1,92 @@
 # Xvideo
 
-[中文](README.md) | [English](README.en.md)
+[English](README.md) | [Simplified Chinese](README.zh-CN.md)
 
-Xvideo 是一个原生 macOS 影视客户端，用 SwiftUI 写界面，通过用户配置的媒体 API 拉取影片列表、详情和播放地址。
+Xvideo is a native macOS video client built with SwiftUI. It fetches video
+lists, details, and playback sources from user-configured media APIs, then
+presents them in a desktop-style browsing and playback experience.
 
-项目现在主要围绕日常观看体验在迭代：浏览分类、搜索影片、查看详情、切换剧集、记录本地追番进度、收藏常看的内容，以及在本地播放器里播放视频。
+The project is focused on everyday watching: browsing categories, searching
+titles, reading details, switching episodes, tracking local watch progress,
+saving favorites, and playing videos inside the app.
 
-## 界面预览
+## Preview
 
-主界面采用两栏影院式布局：左侧是媒体库、分类和数据源管理，右侧上半部分显示当前影片详情，下半部分是精选影片和全部影片。点击影片卡片会显示快捷详情并刷新上方详情，双击卡片或点击“开始播放”后进入独立播放页。
+The main window now uses a two-column cinematic layout: media library,
+categories, and source management on the left; the upper-right area shows the
+selected title details, with featured picks and the full catalog below.
+Clicking a title card opens quick details and refreshes the upper detail panel;
+double-click a card or choose Start Playback to enter the dedicated player
+page.
 
-![Xvideo macOS 应用界面预览](Docs/images/app-preview-blurred.png)
+![Xvideo macOS app preview](Docs/images/app-preview-blurred.png)
 
-## 主要功能
+## Features
 
-- 浏览最新更新和影片分类
-- 两栏影院式界面，上方详情面板和播放页分离
-- 精选影片优先展示收藏内容，全部影片支持按两排换一批浏览
-- 搜索影片、演员等关键词
-- 查看海报、简介、地区、年份、主演、导演和更新状态
-- 不内置任何数据源，首次使用需添加自己的采集接口
-- 支持多数据源和播放源切换，兼容 JSON、XML 以及扁平 XML 分类接口
-- 播放器内切换上一集、下一集
-- 支持播放器快退/快进 15 秒，播放窗口可用 Esc 退出
-- 播放剧集时会在本地记录观看进度，可从“继续观看”恢复上次剧集和播放时间
-- 收藏影片会记录所属数据源，并可在“我的收藏”里点击或双击进入播放器继续观看
-- 下载可用的 mp4 资源到 `~/Downloads/Xvideo`
+- Browse latest updates and video categories
+- Use a two-column cinematic interface with an inline detail panel and a
+  separate playback page
+- Prioritize favorites in Featured Picks, and browse the full catalog in
+  two-row shuffle batches
+- Search by title, actor, or keyword
+- View poster, summary, region, year, cast, director, and update status
+- Ships with no built-in data source; add your own collection API before
+  browsing
+- Switch between multiple data and playback sources, including JSON, XML, and
+  flat XML category APIs
+- Jump to the previous or next episode from the player
+- Rewind or fast-forward 15 seconds, and close the playback window with Esc
+- Track local watch progress while episodes play, then resume the last episode
+  and playback time from Continue Watching
+- Favorite videos with their source attached, then click or double-click them
+  in My Favorites to continue watching
+- Download available mp4 resources to `~/Downloads/Xvideo`
 
-## 运行
+## Run
 
-本项目使用 Swift Package Manager，最低支持 macOS 14。
+The project uses Swift Package Manager and requires macOS 14 or later.
 
 ```bash
 swift run Xvideo
 ```
 
-## 打包成 macOS App
+## Build The macOS App
 
 ```bash
 ./Scripts/build_app.sh
 open .build/app/Xvideo.app
 ```
 
-打包脚本会生成：
+The build script creates:
 
 ```text
 .build/app/Xvideo.app
 ```
 
-## 项目结构
+## Project Structure
 
 ```text
 Sources/Xvideo
-├── App                  # 应用入口和依赖装配
-├── Presentation         # SwiftUI 界面和 ViewModel
-├── Domain               # 模型、协议、播放源解析
-├── Data                 # API 请求和仓储实现
-├── Infrastructure       # 下载、收藏等本地能力
-└── Shared               # 通用扩展
+├── App                  # App entry point and dependency setup
+├── Presentation         # SwiftUI views and view models
+├── Domain               # Models, protocols, and playback parsing
+├── Data                 # API client and repository implementation
+├── Infrastructure       # Downloads, favorites, and local system features
+└── Shared               # Shared extensions
 ```
 
-开发流程、分层约定和验证规则放在 [AGENTS.md](AGENTS.md) 与 [Docs/Workflow/](Docs/Workflow/)。
+Development workflow, layer guidance, and verification rules are available in
+[AGENTS.md](AGENTS.md) and [Docs/Workflow/](Docs/Workflow/).
 
-## 说明
+## Notes
 
-应用不内置任何数据源，当前数据来自用户自行配置的接口。播放是否可用会受到资源状态、网络环境和播放源限制影响。启用数据源前会先验证接口可用性，验证失败时会保留当前数据源。遇到某个播放源无法播放时，可以优先切换到另一个播放源试试。
+The app ships with no built-in data source, and all catalog data comes from
+user-configured APIs. Playback availability can vary depending on the resource,
+network environment, and source restrictions. The app validates a data source
+before enabling it, and keeps the current source active if validation fails. If
+one playback source does not play, try switching to another playback source
+first.
+
+## License
+
+MIT License. See [LICENSE](LICENSE).
